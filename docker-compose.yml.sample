@@ -1,0 +1,167 @@
+services:
+
+  #####################################
+  ############## ENDPOINT #############
+  #####################################
+  nft-endpoint:
+    container_name: nft-endpoint
+    image: caddy:2.10.2-alpine
+    read_only: true
+    volumes:
+      - ./endpoint/Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      ############################ SISTEMOS PASSWORD #######################
+      APP_PASSWORD_1: PASSWORD
+      ######################################################################
+    restart: unless-stopped
+
+
+  nft-login:
+    container_name: nft-login
+    image: vuknf/simple-login-page:20250524
+    environment:
+      VITE_SYSTEM_NAME: "NFT Marketplace"
+    restart: unless-stopped
+  #####################################
+  #####################################
+  #####################################
+
+
+
+
+  nft-marketplace:
+    container_name: nft-marketplace
+    image: nft-marketplace
+    user: 1000:1000
+    build:
+      context: ./nextjs-nft-marketplace
+      dockerfile: Dockerfile                                                                        # Prod
+      # dockerfile: Dockerfile.dev                                                                    # Dev
+      args:
+        - NEXT_PUBLIC_NFT_MARKETPLACE_ADDRESS=0x0Bd6c037056c6D162D6fD16d9E27Fb31ddEc5F21
+        - NEXT_PUBLIC_PROJECT_ID=<WALLET_CONNECT_PROJECT_ID>
+        - NEXT_PUBLIC_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<ALCHEMY_API_KEY>
+        - NEXT_PUBLIC_ETHERSCAN_API_KEY=<ETHERSCAN_API_KEY>
+        - NEXT_PUBLIC_GRAPH_URL=/subgraphs/name/nftmarketplace
+        - NEXT_PUBLIC_IPFS_GATEWAY=/ipfs/
+        - NEXT_PUBLIC_IPFS_TIMEOUT=10000
+    environment:
+      - NEXT_PUBLIC_NFT_MARKETPLACE_ADDRESS=0x0Bd6c037056c6D162D6fD16d9E27Fb31ddEc5F21
+      - NEXT_PUBLIC_PROJECT_ID=<WALLET_CONNECT_PROJECT_ID>
+      - NEXT_PUBLIC_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<ALCHEMY_API_KEY>
+      - NEXT_PUBLIC_ETHERSCAN_API_KEY=<ETHERSCAN_API_KEY>
+      - NEXT_PUBLIC_GRAPH_URL=/subgraphs/name/nftmarketplace
+      - NEXT_PUBLIC_IPFS_GATEWAY=/ipfs/
+      - NEXT_PUBLIC_IPFS_TIMEOUT=10000
+    # volumes:                                          # Dev
+    #   - ./nextjs-nft-marketplace:/app                 # Dev
+    restart: unless-stopped
+
+
+
+  # The Graph services
+  nft-graph-node:
+    container_name: nft-graph-node
+    image: graphprotocol/graph-node:v0.41.1
+    environment:
+      postgres_host: nft-postgres
+      postgres_user: nft
+      postgres_pass: nft
+      postgres_db: nft-graph-node
+      ipfs: "nft-ipfs:5001"  
+      GRAPH_LOG: info
+
+      # Infura RPC
+      ethereum: "sepolia:https://eth-sepolia.g.alchemy.com/v2/<ALCHEMY_API_KEY>"
+
+      # Rate limiting settings to avoid errors
+      GRAPH_ETHEREUM_BLOCK_BATCH_SIZE: "1"              # Fetch 1 block at a time (default: 10)
+      GRAPH_ETHEREUM_MAX_BLOCK_RANGE_SIZE: "100"         # Limit block range queries
+      GRAPH_ETHEREUM_REQUEST_RETRIES: "10"              # Retry failed requests
+      GRAPH_ETHEREUM_POLLING_INTERVAL: "3000"           # Poll every 1000ms (1 second)
+
+    depends_on:
+      - nft-ipfs
+      - nft-postgres
+    restart: unless-stopped
+
+
+
+  nft-ipfs:
+    container_name: nft-ipfs
+    image: ipfs/kubo:v0.17.0
+    volumes:
+      - ./_DATA/ipfs:/data/ipfs
+    environment:
+      # Increase storage limit (default is 10GB)
+      IPFS_STORAGE_MAX: "100GB"
+      
+      # Disable automatic garbage collection
+      IPFS_ENABLE_GC: "false"
+      
+      # Set garbage collection threshold higher
+      IPFS_GC_PERIOD: "0"  # 0 = disabled
+      
+      # Keep all blocks (no auto-deletion)
+      IPFS_STORAGE_GC_WATERMARK: "95"  # Only GC when 95% full
+    restart: unless-stopped
+
+
+
+  nft-postgres:
+    container_name: nft-postgres
+    image: postgres:14
+    command:
+      - "postgres"
+      - "-cshared_preload_libraries=pg_stat_statements"
+      - "-cmax_connections=200"
+    environment:
+      POSTGRES_USER: nft
+      POSTGRES_PASSWORD: nft
+      POSTGRES_DB: nft-graph-node
+      PGDATA: "/var/lib/postgresql/data"
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    volumes:
+      - ./_DATA/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+
+
+  nft-dbgate:
+    container_name: nft-dbgate
+    image: dbgate/dbgate:6.1.6-alpine
+    environment:
+      WEB_ROOT: /dbgate
+
+      CONNECTIONS: con1
+      LABEL_con1: PostreSQL
+      SERVER_con1: nft-postgres
+      USER_con1: nft
+      PASSWORD_con1: nft
+      PORT_con1: 5432
+      ENGINE_con1: postgres@dbgate-plugin-postgres
+    read_only: true
+    tmpfs:
+      - /root/.dbgate
+    restart: unless-stopped
+
+
+
+  nft-graph-deployer:
+    container_name: nft-graph-deployer
+    build:
+      context: ./the-graph-nft-marketplace
+      dockerfile: Dockerfile
+      args:
+        GRAPH_NODE_URL: "http://nft-graph-node:8020"
+        IPFS_URL: "http://nft-ipfs:5001"
+        SUBGRAPH_NAME: "nftmarketplace"
+    environment:
+      GRAPH_NODE_URL: "http://nft-graph-node:8020"
+      IPFS_URL: "http://nft-ipfs:5001"
+      SUBGRAPH_NAME: "nftmarketplace"
+    depends_on:
+      - nft-graph-node
+      - nft-ipfs
+    restart: "no"  # Run once and exit
+

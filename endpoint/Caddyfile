@@ -1,0 +1,83 @@
+:80 {
+
+
+    # ####################################
+    # #           Common section         #
+    # ####################################
+    # # SECURITY: Restricts the app in the browser from communicating with external sources
+    # header Content-Security-Policy "
+    #     default-src 'self';
+    #     script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    #     style-src 'self' 'unsafe-inline';
+    #     img-src 'self' data:;
+    #     font-src 'self' data:;
+    #     connect-src 'self';
+    #     frame-ancestors 'self';
+    #     frame-src 'self';
+    #     child-src 'self';
+    #     form-action 'self';
+    #     base-uri 'self';
+    #     worker-src 'self';
+    #     block-all-mixed-content;
+    # "
+    # ####################################
+    # ####################################
+    # ####################################
+
+
+
+    header {
+        Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Pragma "no-cache"
+    }
+
+
+    ############ APP PASSWORD 1 ############
+    @hasCookie1 header_regexp cookieCheck Cookie "(;|^|\ )app-password={$APP_PASSWORD_1}(;|$|\ )"
+    handle @hasCookie1 {
+
+
+        # Graph Node
+        redir /subgraphs /subgraphs/
+        handle /subgraphs/* {
+            reverse_proxy nft-graph-node:8000
+        }
+
+
+        # IPFS Gateway
+        redir /ipfs /ipfs/
+        handle /ipfs/* {
+            reverse_proxy nft-ipfs:8080
+        }
+
+
+        # DBGATE
+        redir /dbgate /dbgate/
+        handle /dbgate/* {
+            reverse_proxy nft-dbgate:3000
+        }
+
+
+        # NFT Marketplace GUI
+        reverse_proxy nft-marketplace:3000
+
+    }
+    ########################################
+
+
+
+
+
+
+
+
+    ######## UNAUTHENTICATED ROUTES ########
+    handle /* {
+        header {
+            Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+            Pragma "no-cache"
+        }
+        reverse_proxy nft-login:80
+    }
+    ########################################
+}

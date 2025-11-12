@@ -1,0 +1,9 @@
+# Persistent data
+_DATA/
+
+# Production docker compose config
+docker-compose.yml
+
+
+# Original author's repository
+Nft-Marketplace/
