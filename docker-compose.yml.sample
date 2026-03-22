@@ -129,7 +129,7 @@ services:
 
   nft-dbgate:
     container_name: nft-dbgate
-    image: dbgate/dbgate:6.1.6-alpine
+    image: dbgate/dbgate:7.1.4-alpine
     environment:
       WEB_ROOT: /dbgate
 
