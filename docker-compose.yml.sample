@@ -1,0 +1,158 @@
+services:
+
+  # ------------------------------------------------------------
+  #              Incoming/outgoing traffic endpoints
+  # ------------------------------------------------------------
+  nft-endpoint:
+    container_name: nft-endpoint
+    image: caddy:2.11-alpine
+    user: 1000:1000
+    read_only: true
+    volumes:
+      - ./endpoint/Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      ############################ SISTEMOS PASSWORD #######################
+      APP_PASSWORD_1: PASSWORD
+      ######################################################################
+    restart: unless-stopped
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+
+
+
+
+
+
+
+  # ------------------------------------------------------------
+  #                        Students gate
+  # ------------------------------------------------------------
+  nft-login:
+    container_name: nft-login
+    image: vuknf/simple-login-page:20250524
+    user: 1000:1000
+    read_only: true
+    environment:
+      VITE_SYSTEM_NAME: "NFT Marketplace"
+    restart: unless-stopped
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+  # ------------------------------------------------------------
+  #                    NFT Marketplace Services
+  # ------------------------------------------------------------
+  nft-vite:
+    container_name: nft-vite
+
+    # Docker hub
+    image: vuknf/nft-vite:latest
+
+    # # Self-built image
+    # image: nft-vite
+    # build:
+    #   context: ./vite
+    #   # dockerfile: Dockerfile                                                         # Prod
+    #   dockerfile: Dockerfile.dev                                                     # Dev
+
+    user: 1000:1000
+    read_only: true
+    # tmpfs:                                                                           # Dev
+    #   - /home/node/.npm:uid=1000,gid=1000                                            # Dev
+    # volumes:                                                                         # Dev
+    #   - ./vite/app:/app                                                              # Dev
+    restart: unless-stopped
+
+
+
+  nft-backend:
+    container_name: nft-backend
+
+    # Docker hub
+    image: vuknf/nft-backend:latest
+
+    # # Self-built image
+    # image: nft-backend
+    # build: ./backend
+
+    user: 1000:1000
+    read_only: true
+    environment:
+      # - APP_DEBUG=True                                                               # Dev
+      - NFT_MARKETPLACE_ADDRESS=0x0Bd6c037056c6D162D6fD16d9E27Fb31ddEc5F21
+      - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
+      - ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY}
+    volumes:
+      # Configuration
+      - /etc/localtime:/etc/localtime:ro
+
+      # Backend Database
+      - ./_DATA/backend:/data
+
+      # Backend Source Code
+      # - ./backend:/app                                                               # Dev
+    restart: unless-stopped
+
+
+
+  nft-ipfs:
+    container_name: nft-ipfs
+    image: ipfs/kubo:v0.43.0
+    user: 1000:1000
+    read_only: true
+    volumes:
+      - ./_DATA/ipfs:/data/ipfs
+    restart: unless-stopped
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+  # ------------------------------------------------------------
+  #              Additional administration services 
+  # ------------------------------------------------------------
+  nft-dbgate:
+    container_name: nft-dbgate
+    image: dbgate/dbgate:7.1.12
+    user: root
+    read_only: true
+    environment:
+      WEB_ROOT: /dbgate
+
+      CONNECTIONS: con1
+      LABEL_con1: NFT Marketplace DB
+      FILE_con1: /data/database.db
+      ENGINE_con1: sqlite@dbgate-plugin-sqlite
+
+    tmpfs:
+      - /root/.dbgate
+    volumes:
+      - ./_DATA/backend:/data
+    restart: unless-stopped
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+
+
+
+

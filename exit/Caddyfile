@@ -1,0 +1,32 @@
+{
+    layer4 {
+        :443 {
+
+
+
+            # ------------------------------------------------------------
+            #                       Infura RPC
+            # ------------------------------------------------------------
+
+            @exit_infura tls sni sepolia.infura.io
+            route @exit_infura {
+                proxy sepolia.infura.io:443
+            }
+
+
+
+
+            # ------------------------------------------------------------
+            #                       Etherscan API
+            # ------------------------------------------------------------
+
+            @exit_etherscan tls sni api.etherscan.io
+            route @exit_etherscan {
+                proxy api.etherscan.io:443
+            }
+
+
+
+        }
+    }
+}

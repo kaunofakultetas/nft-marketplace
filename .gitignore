@@ -1,0 +1,9 @@
+# Persistent data
+/_DATA
+/_OLD
+.env
+/.claude
+
+
+# Production docker compose config
+docker-compose.yml
