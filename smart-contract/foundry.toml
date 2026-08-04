@@ -1,0 +1,52 @@
+############################################################
+#  [*] Foundry configuration — the contract test harness
+#
+#  The tests run in Foundry's own in-process EVM: no chain, no node, no network, no
+#  wallet. `forge test` compiles the contract, deploys it into a simulated chain per
+#  test and asserts on the result in milliseconds — see runTests.sh, which does the
+#  whole thing inside a throwaway container (nothing is ever installed on the host).
+#
+#  Layout notes:
+#    src = "src"    the contract. It must live in its own folder and NOT at the project
+#                   root: forge compiles everything under src, so a root of "." would
+#                   drag lib/ in too — including OpenZeppelin's own verification
+#                   harnesses, which import files that exist only in their CI
+#    test = "tests" the folder name asked for by this project
+#    libs = lib/    forge-std + OpenZeppelin, baked into the image by the Dockerfile
+#
+#  This is the ONLY configuration file: forge finds a project by the presence of
+#  foundry.toml, so it cannot move elsewhere — the import remappings that would
+#  otherwise need a second file (remappings.txt) are folded in below.
+############################################################
+
+[profile.default]
+src = "src"
+test = "tests"
+libs = ["lib"]
+solc = "0.8.30"
+optimizer = true
+optimizer_runs = 200
+
+# Where the import paths written in the .sol files actually resolve to
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+# Fuzz tests (any test taking parameters) get this many random
+# runs — 256 is fast enough to keep the suite under a second
+[fuzz]
+runs = 256
+
+# Invariant testing: `runs` random sequences of `depth` actions each, driven through
+# tests/handlers/MarketplaceHandler.sol. fail_on_revert stays false because the handler
+# deliberately attempts actions that may no longer be valid (buying a listing another
+# sequence step already cancelled) — a rejected action is normal life, not a finding
+[invariant]
+runs = 64
+depth = 32
+fail_on_revert = false
+
+# No per-selector call tables after every invariant — they say nothing a passing run
+# needs to say. `runTests.sh -vv` brings them back when a failure needs explaining.
+show_metrics = false
