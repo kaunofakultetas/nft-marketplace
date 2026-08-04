@@ -13,8 +13,6 @@ pragma solidity ^0.8.20;
 //  Used by:
 //    - every suite under tests/ — all of them inherit this fixture, so the list is
 //      deliberately not enumerated: it would go stale the moment a suite is added
-//      tests/Cancelling.t.sol, tests/Buying.t.sol, tests/Proceeds.t.sol,
-//      tests/EventSignatures.t.sol
 // ---------------------------------------------------------------------------------------
 
 import {Test} from "forge-std/Test.sol";
