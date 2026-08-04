@@ -90,7 +90,7 @@ services:
     read_only: true
     environment:
       # - APP_DEBUG=True                                                               # Dev
-      - NFT_MARKETPLACE_ADDRESS=0x0Bd6c037056c6D162D6fD16d9E27Fb31ddEc5F21
+      - NFT_MARKETPLACE_ADDRESS=<HERE_WRITE_YOUR_NFT_MARKETPLACE_SMART_CONTRACT_ADDRESS>
       - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
       - ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY}
     volumes:
