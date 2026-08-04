@@ -22,6 +22,9 @@
 #  chatter and every passing test, leaving the per-suite
 #  results.
 #
+#  Colour is handled here too, because nothing inside the
+#  container can work it out for itself — see STEP 3.
+#
 #  The first run downloads the image and clones the
 #  dependencies into it (~1 min); later runs reuse the
 #  cached layers and only recompile what changed.
@@ -83,20 +86,44 @@ fi
 
 
 
-# STEP 3: build, then run. Both are quietened together — a silent run that still
+# STEP 3: colour. `docker run` gives the container a PIPE for stdout, never a
+# terminal, so forge's own auto-detection can only ever decide against colour —
+# the terminal it would need to ask about is out here. Forcing it on is skipped
+# when this script's output is redirected, so a saved log stays free of escape
+# codes, and skipped again if the caller passed a --color of their own.
+# =============================================================================
+COLOR=()
+if [ -t 1 ]; then
+    COLOR=(--color always)
+
+    for arg in "$@"; do
+        case "$arg" in
+            --color*) COLOR=() ;;
+        esac
+    done
+fi
+
+
+
+
+# STEP 4: build, then run. Both are quietened together — a silent run that still
 # printed twenty lines of docker layers would not be silent.
 # ==============================================================================
 if [ "$QUIET" = "1" ]; then
     sudo docker build -q -t "$IMAGE" . > /dev/null
 
-    # Keep the suite verdicts, the failures and the final tally; drop the rest
-    sudo docker run --rm "$IMAGE" test "$@" \
-        | grep -E "^(Ran |Suite result|Encountered|\[FAIL)" || true
+    # Keep the suite verdicts, the failures and the final tally; drop the rest.
+    # A failure line begins with the escape that paints it red, so the anchor has
+    # to step over any colour before it looks for the word — without that, turning
+    # colour on would quietly hide every failing test from this view
+    ESC=$'\033'
+    sudo docker run --rm "$IMAGE" test "${COLOR[@]}" "$@" \
+        | grep -E "^(${ESC}\[[0-9;]*m)*(Ran |Suite result|Encountered|\[FAIL)" || true
 else
     echo "==> Building the test image"
     sudo docker build -t "$IMAGE" .
 
     echo
     echo "==> Running the test suite"
-    sudo docker run --rm "$IMAGE" test "$@"
+    sudo docker run --rm "$IMAGE" test "${COLOR[@]}" "$@"
 fi
