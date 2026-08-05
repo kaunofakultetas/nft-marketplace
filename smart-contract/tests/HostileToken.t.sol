@@ -53,8 +53,8 @@ contract HostileTokenTest is MarketplaceTestBase {
     // PROPERTY: a buyer who pays must end up owning the token — or the sale must be
     // refused and the money stay put. A token contract whose safeTransferFrom quietly
     // does nothing must not be able to take the ETH and keep the NFT.
-    // EXPECTED FAILURE: nothing re-reads ownerOf after the transfer, so the sale is
-    // recorded as complete while the token never moved.
+    // FIXED: buyListing reads ownerOf back after the transfer and reverts with
+    // NftNotReceived, so the whole purchase unwinds and the buyer keeps their money.
     function test_Attack_TokenContractThatDoesNotActuallyTransfer() public {
         MaliciousNft evil =
             new MaliciousNft(MaliciousNft.Mode.SkipTransfer, marketplace);
@@ -131,10 +131,9 @@ contract HostileTokenTest is MarketplaceTestBase {
 
     // PROPERTY: the buyer must receive the token they paid for, not whatever the
     // collection felt like sending.
-    // EXPECTED FAILURE: safeTransferFrom is fire-and-forget — the marketplace never
-    // checks WHICH token arrived, so a collection can accept a sale of one token, hand
-    // the buyer a worthless second one, and have the sale recorded as successful. Reading
-    // ownerOf(tokenId) back after the transfer is what would catch it.
+    // FIXED: safeTransferFrom is fire-and-forget, so a collection can accept the sale of
+    // one token and hand over a worthless second one instead. buyListing now reads
+    // ownerOf(tokenId) back afterwards, which is the only thing that can catch it.
     function test_Attack_SafeTransferFromDeliversADifferentTokenId() public {
         MisbehavingNft evil =
             new MisbehavingNft(MisbehavingNft.Mode.TransferWrongToken, marketplace);
@@ -205,9 +204,9 @@ contract HostileTokenTest is MarketplaceTestBase {
     // PROPERTY: no listing may name the zero address as its seller — proceeds booked
     // there can never be withdrawn by anybody, so the buyer's ETH would be burnt inside
     // the marketplace while the books still claim it is owed to someone.
-    // EXPECTED FAILURE: listItem only compares ownerOf against msg.sender, and the zero
-    // address matches its own reflection. A hardened listItem rejects a zero owner
-    // outright instead of trusting the comparison.
+    // FIXED: the isOwner modifier only compares ownerOf against msg.sender, and the zero
+    // address matches its own reflection — so listItem now refuses a zero-address seller
+    // outright rather than trusting that comparison.
     function test_Attack_NoListingIsEverCreatedForAZeroAddressSeller() public {
         MisbehavingNft evil =
             new MisbehavingNft(MisbehavingNft.Mode.ZeroOwner, marketplace);

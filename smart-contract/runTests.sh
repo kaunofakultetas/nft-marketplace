@@ -41,7 +41,7 @@ IMAGE="nft-marketplace-tests"
 
 # STEP 1: no arguments means "tell me how to use this" — print the options and stop.
 # The everyday one is marked, and emphasised when the terminal can show it.
-# =================================================================================
+# ==================================================================================
 if [ $# -eq 0 ]; then
     if [ -t 1 ]; then
         BOLD="\033[1m"
@@ -72,7 +72,7 @@ fi
 
 # STEP 2: this script's own arguments, peeled off before the rest goes to forge —
 # -q for a quiet run, `all` for "no extra flags, just run everything".
-# ==============================================================================
+# ===============================================================================
 QUIET=0
 if [ "$1" = "-q" ] || [ "$1" = "--quiet" ]; then
     QUIET=1

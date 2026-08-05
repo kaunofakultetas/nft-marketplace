@@ -240,11 +240,10 @@ contract AccessControlTest is MarketplaceTestBase {
         assertEq(marketplace.getListing(address(nft), TOKEN_ID).price, PRICE);
     }
 
-    // EXPECTED FAILURE: cancelling is guarded by CURRENT ownership alone, so the person
-    // who MADE the offer cannot retract it once the token has moved. Behind a
-    // collection-wide approval the abandoned listing comes back to life at the old price
-    // the moment the token returns, binding the seller to a price they tried to withdraw.
-    // A safe contract lets the recorded seller cancel their own listing at any time.
+    // FIXED: cancelling used to be guarded by CURRENT ownership alone, so whoever MADE
+    // the offer could not retract it once the token moved — and behind a collection-wide
+    // approval the abandoned listing came back to life at the old price the moment the
+    // token returned. The recorded seller may now always cancel.
     function test_FormerSeller_MustBeAbleToRetractTheirOwnOffer() public {
         vm.startPrank(seller);
         nft.setApprovalForAll(address(marketplace), true);

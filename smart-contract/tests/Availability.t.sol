@@ -50,9 +50,9 @@ contract AvailabilityTest is MarketplaceTestBase {
     uint256 private constant GAS_TOLERANCE = 5_000;
 
 
-    // EXPECTED FAILURE: the seller lists, then the token is burned. ownerOf now reverts,
-    // and every route to the listing goes through isOwner, so the recorded seller can no
-    // longer take their own listing back — the storefront advertises it forever.
+    // FIXED: the seller lists, then the token is burned, so ownerOf reverts. Every route
+    // to the listing used to go through isOwner; the seller's cancel now asks the
+    // collection nothing at all, which is the only way out of this one.
     function test_Dos_BurnedTokenLeavesTheListingStrandedForever() public {
         BurnableNft dead = _listedBurnableCollection();
 
@@ -79,9 +79,9 @@ contract AvailabilityTest is MarketplaceTestBase {
         }
     }
 
-    // EXPECTED FAILURE: the same trap without a burn. A collection whose ownerOf reverts
-    // for any reason at all — a bad upgrade, a frozen accessor — freezes every listing it
-    // ever had, because the marketplace has no route that skips the question.
+    // FIXED: the same trap without a burn. A collection whose ownerOf reverts for any
+    // reason at all — a bad upgrade, a frozen accessor — used to freeze every listing it
+    // ever had, because no route skipped the question. The seller's cancel now does.
     function test_Dos_CollectionWithABrokenOwnerOfStrandsTheListing() public {
         BurnableNft broken = _listedBurnableCollection();
 
@@ -102,9 +102,9 @@ contract AvailabilityTest is MarketplaceTestBase {
         }
     }
 
-    // EXPECTED FAILURE: a collection that reverts on EVERY call makes the listing
-    // immortal — unbuyable, so it is pure noise on the storefront, and uncancellable, so
-    // it stays there. The buyer half is proved first because that half behaves correctly.
+    // FIXED: a collection that reverts on EVERY call used to make the listing immortal —
+    // unbuyable, so pure noise on the storefront, and uncancellable, so it stayed there.
+    // The buyer half is proved first because that half always behaved correctly.
     function test_Dos_BrickedCollectionMakesTheListingImmortal() public {
         BurnableNft bricked = _listedBurnableCollection();
 

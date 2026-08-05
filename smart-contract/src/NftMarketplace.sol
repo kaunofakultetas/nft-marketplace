@@ -34,6 +34,21 @@ pragma solidity ^0.8.20;
 //      from a new listing
 //    - approvals granted with setApprovalForAll were refused
 //
+//  Hardened afterwards, each one found by a test in smart-contract/tests/ rather than by
+//  reading the code — the 2024 contract had all of these too:
+//    - the seller could buy their own listing: it moves nothing, but it mints a real
+//      ItemBought, so volume and "last sold for" could be invented for free
+//    - a listing whose token had left the seller could be cancelled by NOBODY. The
+//      recorded seller may now always retract, and anyone may retire a PROVABLY stale one
+//    - a burned token, or a collection whose ownerOf reverts, froze its listing on the
+//      storefront for ever — every route to it went through a question the token could
+//      no longer answer
+//    - a collection could accept the transfer call and deliver nothing, or deliver a
+//      DIFFERENT token, and the sale was still recorded as complete
+//    - ItemBought was emitted after the transfer, so anything a buyer's onERC721Received
+//      hook listed was logged BEFORE the sale that carried it, and the indexer replaying
+//      logs in order deleted a listing that really exists
+//
 //  Compile notes: OpenZeppelin v5 (ReentrancyGuard lives in utils/ since v5, not
 //  security/) and Solidity ^0.8.20.
 //
@@ -72,8 +87,11 @@ error NftMarketplace__AlreadyListed(address nftAddress, uint256 tokenId);
 error NftMarketplace__NotListed(address nftAddress, uint256 tokenId);
 error NftMarketplace__NotOwner();
 error NftMarketplace__NotSeller();
+error NftMarketplace__ZeroAddressSeller();
 error NftMarketplace__ListingStale(address nftAddress, uint256 tokenId);
 error NftMarketplace__PriceNotMet(address nftAddress, uint256 tokenId, uint256 price);
+error NftMarketplace__SellerCannotBuy();
+error NftMarketplace__NftNotReceived(address nftAddress, uint256 tokenId);
 error NftMarketplace__NoProceeds();
 error NftMarketplace__TransferFailed();
 
@@ -249,7 +267,8 @@ contract NftMarketplace is ReentrancyGuard {
     // custody, so ownership is always read live rather than remembered.
     //
     // Used by:
-    //   - listItem, updateListing, cancelListing (below)
+    //   - listItem, updateListing (below). NOT cancelListing: a cancel must keep working
+    //     when the collection can no longer answer the question at all
     // -----------------------------------------------------------------------------------
 
     modifier isOwner(address nftAddress, uint256 tokenId, address spender) {
@@ -288,6 +307,12 @@ contract NftMarketplace is ReentrancyGuard {
     {
         if (price == 0) {
             revert NftMarketplace__PriceMustBeAboveZero();
+        }
+        // isOwner only proved ownerOf equals msg.sender, and a collection whose ownerOf
+        // returns the zero address satisfies that for a zero-address caller. Sale money
+        // booked to address(0) could never be withdrawn by anyone, so it would be burnt
+        if (msg.sender == address(0)) {
+            revert NftMarketplace__ZeroAddressSeller();
         }
         if (!_isApprovedForMarketplace(nftAddress, tokenId)) {
             revert NftMarketplace__NotApprovedForMarketplace();
@@ -347,9 +372,11 @@ contract NftMarketplace is ReentrancyGuard {
     // cancelListing
     // -----------------------------------------------------------------------------------
     //
-    // Takes a listing off the market. Guarded by CURRENT ownership rather than by
-    // seller: whoever holds the token may clear its listing, which is what lets a new
-    // owner clean up a stale listing they inherited.
+    // Takes a listing off the market. Two people have standing: the seller who MADE the
+    // offer, always and unconditionally, and — once the listing is provably stale —
+    // anybody at all. Between them no listing can ever get stuck on the storefront, which
+    // is the whole point: an offer nobody can retract is one the market keeps advertising
+    // for ever, and every buyer who tries it pays gas for a guaranteed revert.
     //
     // Used by:
     //   - vite/app/src/components/UpdateListingModal
@@ -361,8 +388,21 @@ contract NftMarketplace is ReentrancyGuard {
     )
         external
         isListed(nftAddress, tokenId)
-        isOwner(nftAddress, tokenId, msg.sender)
     {
+        Listing memory listedItem = s_listings[nftAddress][tokenId];
+
+        // The seller's route asks the collection NOTHING, and that is the point: a burned
+        // token or a bricked collection makes ownerOf revert, so a cancel that needed an
+        // answer would strand the listing exactly when it most needs taking down
+        if (msg.sender != listedItem.seller) {
+            // Everyone else has to show the listing is already dead. A token that has
+            // left its seller can never be sold through this listing again, so retiring
+            // it takes nothing from anybody — and this is also the new owner's route
+            if (IERC721(nftAddress).ownerOf(tokenId) == listedItem.seller) {
+                revert NftMarketplace__NotOwner();
+            }
+        }
+
         delete (s_listings[nftAddress][tokenId]);
         emit ItemCanceled(msg.sender, nftAddress, tokenId);
     }
@@ -381,6 +421,11 @@ contract NftMarketplace is ReentrancyGuard {
     // direction. The token moves straight from the seller's wallet to the buyer's; the
     // ETH waits in this contract until the seller withdraws it.
     //
+    // The purchase is all-or-nothing: it ends by reading ownership back out of the
+    // collection, so a buyer either holds the token they paid for or keeps their money.
+    // The cost of that guarantee is that a buyer contract may not pass the token
+    // straight on from inside its own onERC721Received hook.
+    //
     // Used by:
     //   - vite/app/src/components/BuyNftModal
     // -----------------------------------------------------------------------------------
@@ -395,6 +440,13 @@ contract NftMarketplace is ReentrancyGuard {
         nonReentrant
     {
         Listing memory listedItem = s_listings[nftAddress][tokenId];
+
+        // Buying your own listing moves no token and costs only gas, but it does mint a
+        // real ItemBought — so volume, sale count and "last sold for" could all be
+        // invented by one wallet trading with itself
+        if (msg.sender == listedItem.seller) {
+            revert NftMarketplace__SellerCannotBuy();
+        }
 
         if (msg.value != listedItem.price) {
             revert NftMarketplace__PriceNotMet(nftAddress, tokenId, listedItem.price);
@@ -418,8 +470,9 @@ contract NftMarketplace is ReentrancyGuard {
         delete (s_listings[nftAddress][tokenId]);
         s_proceeds[listedItem.seller] += msg.value;
 
-        IERC721(nftAddress).safeTransferFrom(listedItem.seller, msg.sender, tokenId);
-
+        // Announced BEFORE the token moves, because safeTransferFrom hands control to the
+        // buyer: anything their hook lists would otherwise be logged AHEAD of the sale
+        // that carried it, and the indexer replaying logs in order would delete it again
         emit ItemBought(
             msg.sender,
             nftAddress,
@@ -427,6 +480,15 @@ contract NftMarketplace is ReentrancyGuard {
             listedItem.seller,
             listedItem.price
         );
+
+        IERC721(nftAddress).safeTransferFrom(listedItem.seller, msg.sender, tokenId);
+
+        // safeTransferFrom is fire-and-forget: a collection can accept the call and move
+        // nothing, or move a DIFFERENT token, and this contract would never know. Reading
+        // the owner back is the only proof the buyer got what they paid for
+        if (IERC721(nftAddress).ownerOf(tokenId) != msg.sender) {
+            revert NftMarketplace__NftNotReceived(nftAddress, tokenId);
+        }
     }
 
 

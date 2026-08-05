@@ -30,7 +30,7 @@ contract EconomicsTest is MarketplaceTestBase {
 
     // PROPERTY: a seller must not be able to buy their own listing — it moves nothing,
     // costs only gas, and inflates the marketplace's sales and volume statistics.
-    // EXPECTED FAILURE: nothing compares the buyer with the seller, so the sale lands.
+    // FIXED: buyListing compares the two and reverts with SellerCannotBuy.
     function test_Attack_SellerBuysTheirOwnListingToFakeVolume() public {
         _list(TOKEN_ID, PRICE);
         vm.deal(seller, 10 ether);

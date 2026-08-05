@@ -484,12 +484,12 @@ contract StateMachineTest is MarketplaceTestBase {
         }
     }
 
-    // EXPECTED FAILURE: a listing whose token has moved to an address that can never call
+    // FIXED: a listing whose token has moved to an address that can never call
     // cancelListing — the marketplace itself here, a vault, a bridge or a burn address in
-    // the wild — is both unbuyable and unremovable. It is advertised for ever and every
-    // buyer who tries it pays gas for a guaranteed revert. The desired behaviour is a
-    // permissionless cancel once a listing is PROVABLY stale (ownerOf != seller), which
-    // takes nothing from anyone: such a listing can never complete again anyway.
+    // the wild — used to be both unbuyable and unremovable, advertised for ever with
+    // every buyer paying gas for a guaranteed revert. A cancel is now permissionless once
+    // the listing is PROVABLY stale (ownerOf != seller), which takes nothing from anyone:
+    // such a listing could never complete again anyway.
     function test_ProvablyStaleListingCanBeRetiredByAnyone() public {
         _list(TOKEN_ID, PRICE);
 
@@ -504,11 +504,8 @@ contract StateMachineTest is MarketplaceTestBase {
         vm.prank(buyer);
         marketplace.buyListing{value: PRICE}(address(nft), TOKEN_ID);
 
-        vm.expectRevert(NftMarketplace__NotOwner.selector);
-        vm.prank(seller);
-        marketplace.cancelListing(address(nft), TOKEN_ID);
-
-        // Nobody is left who could clear it, so somebody must be allowed to
+        // Nobody owns it who could ever call this, so somebody else must be allowed to —
+        // and a passer-by is the harder half to get right, so it is the one asserted here
         vm.prank(stranger);
         marketplace.cancelListing(address(nft), TOKEN_ID);
 

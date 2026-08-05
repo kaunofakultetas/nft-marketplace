@@ -139,10 +139,10 @@ contract ReentrancyTest is MarketplaceTestBase {
         assertEq(relisted.price, RELIST_PRICE, "re-listing kept the old price");
     }
 
-    // EXPECTED FAILURE: ItemBought is emitted AFTER safeTransferFrom, so a listing made
-    // inside the buyer's hook is logged BEFORE the sale that enabled it. The indexer
-    // deletes the active listing on ItemBought, so it drops a listing that really exists
-    // on-chain. Emitting ItemBought with the other effects would restore the order.
+    // FIXED: ItemBought used to be emitted AFTER safeTransferFrom, so a listing made
+    // inside the buyer's hook was logged BEFORE the sale that enabled it — and since the
+    // indexer deletes the active listing on ItemBought, it dropped a listing that really
+    // exists on-chain. The event now goes out with the other effects, ahead of the hook.
     function test_Attack_RelistFromTheHookIsLoggedBeforeTheSaleThatCarriedIt() public {
         _list(TOKEN_ID, PRICE);
 

@@ -133,6 +133,9 @@ contract MarketplaceHandler is Test {
         NftMarketplace.Listing memory listing =
             i_marketplace.getListing(address(i_nft), tokenId);
         if (listing.price == 0) return;
+        // Three actors and five tokens means the fuzzer picks the seller as the buyer
+        // often; the marketplace refuses that, and a refusal explores nothing
+        if (listing.seller == actor) return;
         // A listing whose seller moved the token on is stale and cannot be bought
         if (i_nft.ownerOf(tokenId) != listing.seller) return;
         // ...and neither can one whose approval was pulled back since
