@@ -15,10 +15,10 @@ pragma solidity ^0.8.20;
 //  have to be edited by hand to match a renamed event, which is the very mistake being
 //  guarded against.
 //
-//  The INDEXER_TOPIC_* constants below are copied VERBATIM from indexer.py as it stands
-//  today, so they are the other system's belief rather than this contract's. Two of them
-//  are already out of date, which is exactly what this file exists to shout about — see
-//  test_ItemBought_MatchesTheIndexersConstant.
+//  The INDEXER_TOPIC_* constants below are copied VERBATIM from backend/main.py's
+//  EVENT_TOPICS — the other system's belief rather than this contract's. Change an event
+//  here without pasting the new hash there and one of these tests goes red before
+//  anything reaches a chain.
 // ---------------------------------------------------------------------------------------
 
 import {Vm} from "forge-std/Vm.sol";
@@ -27,19 +27,16 @@ import {MarketplaceTestBase} from "./base/MarketplaceTestBase.sol";
 
 contract EventSignaturesTest is MarketplaceTestBase {
 
-    // Verbatim from backend/app/marketplace/indexer.py — do not recompute these from the
+    // Verbatim from backend/main.py's EVENT_TOPICS — do not recompute these from the
     // contract, that would make every test below compare the contract with itself
     bytes32 private constant INDEXER_TOPIC_ITEM_LISTED =
         0xd547e933094f12a9159076970143ebe73234e64480317844b0dcb36117116de4;
+    bytes32 private constant INDEXER_TOPIC_ITEM_UPDATED =
+        0x3c33e65e8698294810b631d476d60b44425303828da0b1f8b635231bfda12be2;
     bytes32 private constant INDEXER_TOPIC_ITEM_BOUGHT =
-        0x263223b1dd81e51054a4e6f791d45a4a1ddb4aadcd93a2dfd892615c3fdac187;
+        0x93c830507acd24c092e291f65f36eccf9df2be394d8b7a1802669761ff1ed995;
     bytes32 private constant INDEXER_TOPIC_ITEM_CANCELED =
         0x9ba1a3cb55ce8d63d072a886f94d2a744f50cddf82128e897d0661f5ec623158;
-
-    // indexer.py has NO constant for ItemUpdated: the event did not exist when it was
-    // written, so a reprice is invisible to the backend until a constant is added there
-    bytes32 private constant CONTRACT_TOPIC_ITEM_UPDATED =
-        0x3c33e65e8698294810b631d476d60b44425303828da0b1f8b635231bfda12be2;
 
     // The indexer's decoder reads three indexed params out of every event: topic[0] plus
     // three more
@@ -88,12 +85,8 @@ contract EventSignaturesTest is MarketplaceTestBase {
         assertEq(log.data.length, 0, "data should be empty");
     }
 
-    // EXPECTED FAILURE, and the most useful red in the suite. ItemBought gained a seller
-    // parameter, so its signature — and therefore its topic — is no longer the one
-    // indexer.py matches on. Deploying this contract without updating the backend would
-    // leave every sale unseen: the storefront would keep advertising tokens that have
-    // already been bought. The backend needs the new topic AND a decoder that reads two
-    // data words (seller, then price) instead of one.
+    // Buying announces the seller-carrying event the backend's decoder reads two data
+    // words out of
     function test_ItemBought_MatchesTheIndexersConstant() public {
         _list(TOKEN_ID, PRICE);
 
@@ -105,15 +98,14 @@ contract EventSignaturesTest is MarketplaceTestBase {
         assertEq(
             log.topics[0],
             INDEXER_TOPIC_ITEM_BOUGHT,
-            "ItemBought topic no longer matches indexer.py - update the backend"
+            "ItemBought topic no longer matches the backend's EVENT_SIGNATURES"
         );
+        assertEq(log.topics.length, EXPECTED_TOPIC_COUNT, "indexed params changed");
     }
 
-    // The other half of that gap: a reprice is a brand new event the backend has never
-    // heard of. This test PASSES — it asserts the true and unwelcome fact that the topic
-    // matches none of the three constants indexer.py knows, so repricing is invisible
-    // until a TOPIC_ITEM_UPDATED is added there.
-    function test_ItemUpdated_IsInvisibleToTheIndexerToday() public {
+    // A reprice announces its own event — matched by the backend as 'Updated' directly,
+    // and distinct from every other topic it knows, so no replay guessing is ever needed
+    function test_ItemUpdated_MatchesTheIndexersConstant() public {
         _list(TOKEN_ID, PRICE);
 
         vm.recordLogs();
@@ -121,7 +113,11 @@ contract EventSignaturesTest is MarketplaceTestBase {
         marketplace.updateListing(address(nft), TOKEN_ID, 2 ether);
 
         Vm.Log memory log = _marketplaceLog();
-        assertEq(log.topics[0], CONTRACT_TOPIC_ITEM_UPDATED, "ItemUpdated topic changed");
+        assertEq(
+            log.topics[0],
+            INDEXER_TOPIC_ITEM_UPDATED,
+            "ItemUpdated topic no longer matches the backend's EVENT_SIGNATURES"
+        );
         assertTrue(log.topics[0] != INDEXER_TOPIC_ITEM_LISTED, "must differ from Listed");
         assertTrue(log.topics[0] != INDEXER_TOPIC_ITEM_BOUGHT, "must differ from Bought");
         assertTrue(

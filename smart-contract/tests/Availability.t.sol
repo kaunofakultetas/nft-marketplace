@@ -102,6 +102,41 @@ contract AvailabilityTest is MarketplaceTestBase {
         }
     }
 
+    // FIXED: the community half of the burned-token escape. The seller's route above is
+    // useless when the seller is gone — and ownerOf reverting used to take the stranger
+    // route down with it, because the staleness check needed an ANSWER to compare
+    // against. A collection that cannot even answer has proved the listing dead better
+    // than any answer could, so anybody may retire it.
+    function test_Dos_AnybodyCanRetireAListingWhoseTokenWasBurned() public {
+        BurnableNft dead = _listedBurnableCollection();
+        dead.burn(DEAD_TOKEN);
+
+        vm.prank(stranger);
+        marketplace.cancelListing(address(dead), DEAD_TOKEN);
+
+        assertEq(
+            marketplace.getListing(address(dead), DEAD_TOKEN).price,
+            0,
+            "the stranger's cancel should have cleared the burned listing"
+        );
+    }
+
+    // FIXED: the same standing against a collection whose ownerOf is broken outright —
+    // the listing is exactly as dead, and the proof is exactly the same revert.
+    function test_Dos_AnybodyCanRetireAListingOnABrokenCollection() public {
+        BurnableNft broken = _listedBurnableCollection();
+        broken.breakOwnerOf();
+
+        vm.prank(stranger);
+        marketplace.cancelListing(address(broken), DEAD_TOKEN);
+
+        assertEq(
+            marketplace.getListing(address(broken), DEAD_TOKEN).price,
+            0,
+            "the stranger's cancel should have cleared the stranded listing"
+        );
+    }
+
     // FIXED: a collection that reverts on EVERY call used to make the listing immortal —
     // unbuyable, so pure noise on the storefront, and uncancellable, so it stayed there.
     // The buyer half is proved first because that half always behaved correctly.

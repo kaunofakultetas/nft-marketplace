@@ -41,7 +41,8 @@ pragma solidity ^0.8.20;
 //
 //  Used by:
 //    - backend/app/marketplace/indexer.py — decodes the four events into SQLite; the
-//      topic hashes live there and MUST be recomputed when an event signature changes
+//      topic hashes are hardcoded in backend/main.py's EVENT_TOPICS and pinned against
+//      this contract's real logs by tests/EventSignatures.t.sol
 //    - vite/app/src/pages/SellNft — listItem, withdrawProceeds
 //    - vite/app/src/components/UpdateListingModal — updateListing, cancelListing
 //    - vite/app/src/components/BuyNftModal — buyListing
@@ -384,9 +385,18 @@ contract NftMarketplace is ReentrancyGuard {
         if (msg.sender != listedItem.seller) {
             // Everyone else has to show the listing is already dead. A token that has
             // left its seller can never be sold through this listing again, so retiring
-            // it takes nothing from anybody — and this is also the new owner's route
-            if (IERC721(nftAddress).ownerOf(tokenId) == listedItem.seller) {
-                revert NftMarketplace__NotOwner();
+            // it takes nothing from anybody — and this is also the new owner's route.
+            // A collection that cannot even ANSWER the question (burned token, broken
+            // or self-destructed contract) has proved the listing dead better than any
+            // answer could — the catch arm accepts exactly that proof, so the seller
+            // walking away can never leave a corpse on the storefront
+            try IERC721(nftAddress).ownerOf(tokenId) returns (address currentOwner) {
+                if (currentOwner == listedItem.seller) {
+                    revert NftMarketplace__NotOwner();
+                }
+            } catch {
+                // ownerOf reverted: the token is gone or the collection is broken —
+                // either way no sale can ever complete through this listing again
             }
         }
 
