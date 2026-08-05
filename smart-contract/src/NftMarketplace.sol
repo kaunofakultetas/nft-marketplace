@@ -21,33 +21,20 @@ pragma solidity ^0.8.20;
 //  (the three params before the bar are INDEXED — they become log topics; everything
 //  after it rides in the data field)
 //
-//  Fixed since the 2024 deployment, all of which students can still watch misbehaving
-//  on the old contract:
-//    - isListed compared a uint256 against < 0, so it was a NO-OP: updateListing could
-//      conjure a listing that had never been approved, and cancelListing fired events
-//      for tokens that were never listed
-//    - a sale credited msg.value while announcing price, so overpayment silently
-//      enriched the seller — the price must now match EXACTLY
-//    - a listing went STALE in silence when the seller moved the token or revoked the
-//      approval; buying one failed with a bare ERC-721 revert instead of a named error
-//    - price updates were announced as ItemListed, making a reprice indistinguishable
-//      from a new listing
-//    - approvals granted with setApprovalForAll were refused
-//
-//  Hardened afterwards, each one found by a test in smart-contract/tests/ rather than by
-//  reading the code — the 2024 contract had all of these too:
-//    - the seller could buy their own listing: it moves nothing, but it mints a real
-//      ItemBought, so volume and "last sold for" could be invented for free
-//    - a listing whose token had left the seller could be cancelled by NOBODY. The
-//      recorded seller may now always retract, and anyone may retire a PROVABLY stale one
-//    - a burned token, or a collection whose ownerOf reverts, froze its listing on the
-//      storefront for ever — every route to it went through a question the token could
-//      no longer answer
-//    - a collection could accept the transfer call and deliver nothing, or deliver a
-//      DIFFERENT token, and the sale was still recorded as complete
-//    - ItemBought was emitted after the transfer, so anything a buyer's onERC721Received
-//      hook listed was logged BEFORE the sale that carried it, and the indexer replaying
-//      logs in order deleted a listing that really exists
+//  The rules worth knowing before reading any single function, none of them guessable
+//  from the function names:
+//    - payment must match the asking price EXACTLY. Paying too much is refused rather
+//      than pocketed or refunded, so no purchase has a surprise in either direction
+//    - a seller may not buy their own listing: nothing moves, but a real ItemBought is
+//      minted, and volume and "last sold for" can be invented out of gas alone
+//    - a listing goes STALE in silence whenever the seller moves the token or revokes
+//      the approval, because nothing on-chain tells this contract. Both are re-checked
+//      at purchase time so the buyer gets a named error, not a bare ERC-721 revert
+//    - the seller may always cancel, with the collection asked nothing at all, and
+//      anybody may retire a PROVABLY stale listing. Between them no offer can get stuck
+//      on the storefront, not even one whose token has been burned
+//    - a purchase ends by reading ownership back out of the collection: the buyer either
+//      holds the token they paid for, or the whole thing unwinds and they keep the money
 //
 //  Compile notes: OpenZeppelin v5 (ReentrancyGuard lives in utils/ since v5, not
 //  security/) and Solidity ^0.8.20.
@@ -193,8 +180,8 @@ contract NftMarketplace is ReentrancyGuard {
     // ItemBought
     // -----------------------------------------------------------------------------------
     //
-    // A sale completed. Carries the SELLER as well as the buyer — the 2024 contract
-    // omitted it, which left the activity feed unable to show who sold to whom.
+    // A sale completed. Carries the SELLER as well as the buyer, so the activity feed can
+    // say who sold to whom without looking the listing up first.
     //
     // Used by:
     //   - indexer.py — inserts a Bought row and deletes the active listing
@@ -239,9 +226,9 @@ contract NftMarketplace is ReentrancyGuard {
     // isListed
     // -----------------------------------------------------------------------------------
     //
-    // The mirror of notListed. In the 2024 contract this read `price < 0` on an UNSIGNED
-    // integer — never true, so the guard did nothing at all and every function it
-    // protected happily ran on empty listings.
+    // The mirror of notListed. The comparison must be against 0 and nothing else: price
+    // is UNSIGNED, so a `< 0` here would never once be true and the guard would enforce
+    // nothing at all while looking exactly as if it did.
     //
     // Used by:
     //   - updateListing, cancelListing, buyListing (below)
@@ -531,8 +518,8 @@ contract NftMarketplace is ReentrancyGuard {
     // -----------------------------------------------------------------------------------
     //
     // Both approval styles count: the single-token approve() and the collection-wide
-    // setApprovalForAll(). The 2024 contract accepted only the first, so students who
-    // used the second were refused with a confusing error.
+    // setApprovalForAll(). Accepting only the first would turn away every seller who
+    // granted the collection instead, which is what most wallets offer first.
     //
     // Used by:
     //   - listItem, updateListing, buyListing (above)
