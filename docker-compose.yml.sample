@@ -133,7 +133,7 @@ services:
   # ------------------------------------------------------------
   nft-dbgate:
     container_name: nft-dbgate
-    image: dbgate/dbgate:7.1.12
+    image: dbgate/dbgate:7.2.3
     user: root
     read_only: true
     environment:
