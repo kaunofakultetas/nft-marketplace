@@ -31,7 +31,7 @@ from flask import Blueprint, jsonify, request, Response
 from app.database.db import get_db_connection
 from app.marketplace.etherscan import EtherscanClient
 from app.marketplace.ownership import WalletHoldings
-from main import SEPOLIA_RPC_URL, NFT_MARKETPLACE_ADDRESS, SEPOLIA_CHAIN_ID
+from main import SEPOLIA_RPC_URL, NFT_MARKETPLACE_ADDRESS, SEPOLIA_CHAIN_ID, EVENT_TOPICS
 
 
 bp_marketplace = Blueprint('marketplace', __name__)
@@ -105,6 +105,7 @@ def get_stats():
         'totalVolumeWei': str(volume),
         'floorPriceWei': str(min(listing_prices)) if listing_prices else None,
         'archive': {r['Status']: r['n'] for r in archive},
+        'eventTopics': EVENT_TOPICS,
     })
 
 

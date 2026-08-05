@@ -28,7 +28,7 @@ import { etherscanAddressUrl, formatDateTime } from '@/utils/format';
 // against the deployed bytecode; see backend indexer.py)
 const CONTRACT_FUNCTIONS = [
   ['listItem(address, uint256, uint256)', 'approve first, then list for a price'],
-  ['buyListing(address, uint256)', 'payable — send the listing price'],
+  ['buyListing(address, uint256)', 'payable — send EXACTLY the listing price'],
   ['updateListing(address, uint256, uint256)', 'change the price (re-emits ItemListed)'],
   ['cancelListing(address, uint256)', 'take the token off the market'],
   ['withdrawProceeds()', 'pull your accumulated sale earnings'],
@@ -36,14 +36,16 @@ const CONTRACT_FUNCTIONS = [
   ['getProceeds(address)', 'view — withdrawable balance'],
 ];
 
-const CONTRACT_EVENTS = [
-  ['ItemListed', 'a token was put up for sale (also fired on every price update)',
-    '0xd547e933094f12a9159076970143ebe73234e64480317844b0dcb36117116de4'],
-  ['ItemBought', 'someone bought a listed token',
-    '0x263223b1dd81e51054a4e6f791d45a4a1ddb4aadcd93a2dfd892615c3fdac187'],
-  ['ItemCanceled', 'a seller took their token off the market',
-    '0x9ba1a3cb55ce8d63d072a886f94d2a744f50cddf82128e897d0661f5ec623158'],
-];
+// What each contract event MEANS — the signatures and topic
+// hashes come LIVE from the backend (/api/stats), which
+// derives them at boot from its configured signatures, so an
+// edited contract never leaves stale hashes here
+const EVENT_MEANINGS = {
+  Listed: 'a token was put up for sale',
+  Updated: 'a listing’s asking price changed',
+  Bought: 'someone bought a listed token (carries buyer, seller and price)',
+  Canceled: 'a listing was taken off the market',
+};
 
 // Chip palette (same as the detail page's ArchivePanel) plus
 // what each archive status actually MEANS — one file of one
@@ -247,13 +249,18 @@ export default function AboutPage() {
               (the hex value is the event's keccak-256 signature, as it appears in raw transaction logs):
             </p>
             <div className="space-y-2 text-sm">
-              {CONTRACT_EVENTS.map(([name, meaning, topic]) => (
-                <div key={name}>
-                  <span className="font-mono font-semibold text-gray-900">{name}</span>
-                  <span className="text-gray-600"> — {meaning}</span>
-                  <div className="font-mono text-xs text-gray-400 break-all">{topic}</div>
-                </div>
-              ))}
+              {stats?.eventTopics && Object.entries(EVENT_MEANINGS).map(([key, meaning]) => {
+                const event = stats.eventTopics[key];
+                if (!event) return null;
+
+                return (
+                  <div key={key}>
+                    <span className="font-mono font-semibold text-gray-900">{event.signature}</span>
+                    <span className="text-gray-600"> — {meaning}</span>
+                    <div className="font-mono text-xs text-gray-400 break-all">{event.topic0}</div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </Section>

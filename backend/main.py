@@ -80,6 +80,37 @@ ETHERSCAN_API_KEY = os.getenv('ETHERSCAN_API_KEY')
 ETHERSCAN_API_URL = 'https://api.etherscan.io/v2/api'
 SEPOLIA_CHAIN_ID = 11155111
 
+# The marketplace contract's four events: the signature and
+# the topic hash (keccak-256 of it) that raw logs carry.
+# HARDCODED on purpose — the exact same hex lives in
+# smart-contract/tests/EventSignatures.t.sol, where the test
+# suite compares it against what the contract REALLY emits;
+# matching the two files is a plain eyeball diff with no
+# derivation to distrust. When an event changes, the suite
+# goes red and prints the new hash — paste it here and there.
+# The decode layout the indexer assumes: three indexed params
+# (actor, nftAddress, tokenId); the data field holds price on
+# Listed/Updated, (seller, price) on Bought, nothing on
+# Canceled — see indexer._decode_log.
+EVENT_TOPICS = {
+    'Listed': {
+        'signature': 'ItemListed(address,address,uint256,uint256)',
+        'topic0': '0xd547e933094f12a9159076970143ebe73234e64480317844b0dcb36117116de4',
+    },
+    'Updated': {
+        'signature': 'ItemUpdated(address,address,uint256,uint256)',
+        'topic0': '0x3c33e65e8698294810b631d476d60b44425303828da0b1f8b635231bfda12be2',
+    },
+    'Bought': {
+        'signature': 'ItemBought(address,address,uint256,address,uint256)',
+        'topic0': '0x93c830507acd24c092e291f65f36eccf9df2be394d8b7a1802669761ff1ed995',
+    },
+    'Canceled': {
+        'signature': 'ItemCanceled(address,address,uint256)',
+        'topic0': '0x9ba1a3cb55ce8d63d072a886f94d2a744f50cddf82128e897d0661f5ec623158',
+    },
+}
+
 # Indexer tuning: 30s staleness is invisible on a classroom
 # marketplace and keeps the poll at ~6% of Etherscan's free
 # daily quota. No start block here — the indexer discovers

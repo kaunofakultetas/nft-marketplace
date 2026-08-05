@@ -34,18 +34,19 @@ import threading
 
 from app.database.db import get_db_connection
 from app.marketplace.etherscan import hex_int
-from main import NFT_MARKETPLACE_ADDRESS, INDEXER_POLL_SECONDS
+from main import NFT_MARKETPLACE_ADDRESS, INDEXER_POLL_SECONDS, EVENT_TOPICS
 
 
-# keccak-256 topic hashes of the three contract events —
-# verified against the DEPLOYED bytecode of
-# NFT_MARKETPLACE_ADDRESS, not just the source:
-#   ItemListed(address,address,uint256,uint256)  (also emitted by updateListing)
-#   ItemBought(address,address,uint256,uint256)
-#   ItemCanceled(address,address,uint256)
-TOPIC_ITEM_LISTED = '0xd547e933094f12a9159076970143ebe73234e64480317844b0dcb36117116de4'
-TOPIC_ITEM_BOUGHT = '0x263223b1dd81e51054a4e6f791d45a4a1ddb4aadcd93a2dfd892615c3fdac187'
-TOPIC_ITEM_CANCELED = '0x9ba1a3cb55ce8d63d072a886f94d2a744f50cddf82128e897d0661f5ec623158'
+# The topic hashes to match on — defined (hardcoded, on
+# purpose) in main.py's EVENT_TOPICS, and pinned by the
+# contract test suite (EventSignatures.t.sol) against what
+# the contract really emits. The contract announces reprices
+# as their own ItemUpdated event, so no replay guessing is
+# ever needed.
+TOPIC_ITEM_LISTED = EVENT_TOPICS['Listed']['topic0']
+TOPIC_ITEM_UPDATED = EVENT_TOPICS['Updated']['topic0']
+TOPIC_ITEM_BOUGHT = EVENT_TOPICS['Bought']['topic0']
+TOPIC_ITEM_CANCELED = EVENT_TOPICS['Canceled']['topic0']
 
 
 # How many blocks an incremental scan re-fetches BELOW the
@@ -120,13 +121,14 @@ def reset_if_contract_changed():
 ############################################################
 #
 # One raw log entry → a flat event dict, or None for logs
-# that don't match the three known signatures — including
-# logs with a different topic COUNT, which a modified
-# contract with re-declared events would emit; skipping them
+# that don't match the four known signatures — including
+# logs with a different topic COUNT or a short data field,
+# which a re-declared event would produce; skipping them
 # beats crashing the scan loop on a malformed decode. All
-# three events index the same three params (actor,
-# nftAddress, tokenId → topics 1..3); price rides in the
-# data word on Listed/Bought. Addresses are lowercased here
+# four events index the same three params (actor,
+# nftAddress, tokenId → topics 1..3); the DATA field differs
+# per event: price on Listed/Updated, (seller, price) on
+# Bought, empty on Canceled. Addresses are lowercased here
 # once — everything downstream compares lowercase.
 #
 # Used by:
@@ -138,30 +140,35 @@ def _decode_log(log):
         return None
 
     topic0 = log['topics'][0]
-    actor = '0x' + log['topics'][1][-40:]
-    nft_address = '0x' + log['topics'][2][-40:]
+    actor = ('0x' + log['topics'][1][-40:]).lower()
+    nft_address = ('0x' + log['topics'][2][-40:]).lower()
     token_id = str(hex_int(log['topics'][3]))
-    data = log.get('data', '0x')
-    price = str(hex_int(data)) if len(data) > 2 else None
+
+    # The data field as 32-byte words
+    data = (log.get('data') or '0x')[2:]
+    words = [data[i:i + 64] for i in range(0, len(data), 64)]
 
     base = {
         'BlockNumber': hex_int(log['blockNumber']),
         'Timestamp': hex_int(log.get('timeStamp') or '0x'),
         'TxHash': log['transactionHash'],
         'LogIndex': hex_int(log['logIndex']),
-        'NftAddress': nft_address.lower(),
+        'NftAddress': nft_address,
         'TokenId': token_id,
         'Seller': None,
         'Buyer': None,
-        'Price': price,
+        'Price': None,
     }
 
-    if topic0 == TOPIC_ITEM_LISTED:
-        return {**base, 'EventType': 'Listed', 'Seller': actor.lower()}
-    if topic0 == TOPIC_ITEM_BOUGHT:
-        return {**base, 'EventType': 'Bought', 'Buyer': actor.lower()}
+    if topic0 == TOPIC_ITEM_LISTED and len(words) >= 1:
+        return {**base, 'EventType': 'Listed', 'Seller': actor, 'Price': str(int(words[0], 16))}
+    if topic0 == TOPIC_ITEM_UPDATED and len(words) >= 1:
+        return {**base, 'EventType': 'Updated', 'Seller': actor, 'Price': str(int(words[0], 16))}
+    if topic0 == TOPIC_ITEM_BOUGHT and len(words) >= 2:
+        return {**base, 'EventType': 'Bought', 'Buyer': actor,
+                'Seller': ('0x' + words[0][-40:]).lower(), 'Price': str(int(words[1], 16))}
     if topic0 == TOPIC_ITEM_CANCELED:
-        return {**base, 'EventType': 'Canceled', 'Seller': actor.lower()}
+        return {**base, 'EventType': 'Canceled', 'Seller': actor}
     return None
 
 
@@ -320,20 +327,6 @@ class MarketplaceIndexer:
 
         with get_db_connection() as conn:
             for event in events:
-
-                # updateListing re-emits ItemListed — on-chain the
-                # two are indistinguishable, but the REPLAY knows:
-                # a Listed event for a token that already has an
-                # active listing is a PRICE UPDATE, stored as its
-                # own event type so the GUI can tell them apart
-                if event['EventType'] == 'Listed':
-                    existing = conn.execute('''
-                        SELECT 1 FROM Marketplace_ActiveListings
-                        WHERE NftAddress = :NftAddress AND TokenId = :TokenId
-                    ''', event).fetchone()
-                    if existing:
-                        event['EventType'] = 'Updated'
-
                 conn.execute('''
                     INSERT OR IGNORE INTO Marketplace_Events
                         (BlockNumber, Timestamp, TxHash, LogIndex, EventType, NftAddress, TokenId, Seller, Buyer, Price)

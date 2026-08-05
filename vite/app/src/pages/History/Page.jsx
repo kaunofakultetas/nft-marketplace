@@ -104,7 +104,9 @@ function FilterChips({ active, onPick }) {
 
 function ActivityRow({ event }) {
 
-  const actor = event.seller || event.buyer;
+  // Bought events carry BOTH parties — the acting party is
+  // the buyer there, the seller everywhere else
+  const actor = event.type === 'Bought' ? event.buyer : event.seller;
 
 
   return (
