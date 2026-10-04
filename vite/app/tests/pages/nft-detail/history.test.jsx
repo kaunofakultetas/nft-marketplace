@@ -39,6 +39,11 @@ const timelineLoaded = () => screen.findAllByRole('link', { name: 'tx ↗' });
 // -----------------------------------------------------------
 // The timeline
 // -----------------------------------------------------------
+//
+// The token's story, newest first: each stripe's chip, actor,
+// transaction, time, block and price — "no history" for a
+// token never traded, nothing while it loads.
+// -----------------------------------------------------------
 
 describe('The timeline', () => {
 
@@ -128,6 +133,11 @@ describe('The timeline', () => {
 
 // -----------------------------------------------------------
 // The archive
+// -----------------------------------------------------------
+//
+// The pinner's verdict on each of the token's files: its CID
+// on hover, its status as recorded — and no card for a token
+// the pinner never saw.
 // -----------------------------------------------------------
 
 describe('The archive', () => {

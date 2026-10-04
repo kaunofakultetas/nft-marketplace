@@ -75,6 +75,11 @@ function holdOwnerReads() {
 // -----------------------------------------------------------
 // Loading progressively
 // -----------------------------------------------------------
+//
+// Each source fills its own panels: the backend's data never
+// waits for IPFS or the owner, and the owner is read once, on
+// its own request.
+// -----------------------------------------------------------
 
 describe('Loading progressively', () => {
 
@@ -112,6 +117,11 @@ describe('Loading progressively', () => {
 
 // -----------------------------------------------------------
 // The token
+// -----------------------------------------------------------
+//
+// The token's facts: its name and description, its collection
+// on Etherscan, its id, its raw JSON, its price while listed,
+// its attributes — and the way back.
 // -----------------------------------------------------------
 
 describe('The token', () => {
@@ -225,6 +235,11 @@ describe('The token', () => {
 // -----------------------------------------------------------
 // The owner
 // -----------------------------------------------------------
+//
+// The owner row: another owner linked on Etherscan, "You" for
+// the student alone, "unknown" when ownerOf reverts, to
+// anyone.
+// -----------------------------------------------------------
 
 describe('The owner', () => {
 
@@ -271,6 +286,10 @@ describe('The owner', () => {
 // -----------------------------------------------------------
 // The image
 // -----------------------------------------------------------
+//
+// The image from the local gateway — the grey placeholder for
+// a dead link or for metadata without an image.
+// -----------------------------------------------------------
 
 describe('The image', () => {
 
@@ -311,6 +330,10 @@ describe('The image', () => {
 
 // -----------------------------------------------------------
 // A wrongly minted token
+// -----------------------------------------------------------
+//
+// A wrongly minted token's diagnosis and its fix above
+// everything else — none for a healthy token.
 // -----------------------------------------------------------
 
 describe('A wrongly minted token', () => {

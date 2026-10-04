@@ -67,6 +67,11 @@ function holdBalanceReads() {
 // -----------------------------------------------------------
 // Who sees what
 // -----------------------------------------------------------
+//
+// Who gets which actions: none without a wallet, a skeleton
+// while the listing loads, "not for sale" for a visitor of an
+// unlisted token.
+// -----------------------------------------------------------
 
 describe('Who sees what', () => {
 
@@ -105,6 +110,11 @@ describe('Who sees what', () => {
 
 // -----------------------------------------------------------
 // The owner
+// -----------------------------------------------------------
+//
+// The owner's actions: managing a listing in the modal, the
+// sell form for an unlisted token — and a visitor's view once
+// another account is picked.
 // -----------------------------------------------------------
 
 describe('The owner', () => {
@@ -167,6 +177,11 @@ describe('The owner', () => {
 
 // -----------------------------------------------------------
 // A visitor buying
+// -----------------------------------------------------------
+//
+// A visitor buying through the confirmation — Buy disabled
+// only once the wallet's balance definitely cannot cover the
+// price.
 // -----------------------------------------------------------
 
 describe('A visitor buying', () => {

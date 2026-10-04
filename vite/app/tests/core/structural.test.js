@@ -243,6 +243,12 @@ function internalTargets() {
 // -----------------------------------------------------------
 // The backend calls
 // -----------------------------------------------------------
+//
+// Every request the SPA makes, read from the source: a
+// default handler in the double for each, relative /api paths
+// only, the chain reached through the relay alone, nothing
+// else talking to the network.
+// -----------------------------------------------------------
 
 describe('structural rules — the backend calls', () => {
 
@@ -317,6 +323,12 @@ describe('structural rules — the backend calls', () => {
 // -----------------------------------------------------------
 // The contracts
 // -----------------------------------------------------------
+//
+// Every contract call, read from the source: a function of
+// the ABI it passes, with its arguments — and the ABIs
+// agreeing with the contract and the standard, the events
+// hashing to the backend's topics.
+// -----------------------------------------------------------
 
 describe('structural rules — the contracts', () => {
 
@@ -378,6 +390,11 @@ describe('structural rules — the contracts', () => {
 
 // -----------------------------------------------------------
 // The route table
+// -----------------------------------------------------------
+//
+// App.jsx's routes against the page directories, the header's
+// links and every link in src/ — none dead, none caught by
+// the catch-all alone.
 // -----------------------------------------------------------
 
 describe('structural rules — the route table', () => {
@@ -441,6 +458,10 @@ describe('structural rules — the route table', () => {
 // -----------------------------------------------------------
 // index.html and the static assets
 // -----------------------------------------------------------
+//
+// The page's language and title, and every image and icon the
+// SPA points at present in public/.
+// -----------------------------------------------------------
 
 describe('structural rules — index.html and the static assets', () => {
 
@@ -472,6 +493,10 @@ describe('structural rules — index.html and the static assets', () => {
 // -----------------------------------------------------------
 // What the SPA remembers
 // -----------------------------------------------------------
+//
+// No storage of the SPA's own in the browser — wagmi's is all
+// that persists.
+// -----------------------------------------------------------
 
 describe('structural rules — what the SPA remembers', () => {
 
@@ -489,6 +514,10 @@ describe('structural rules — what the SPA remembers', () => {
 
 // -----------------------------------------------------------
 // The provider stack
+// -----------------------------------------------------------
+//
+// main.jsx's provider stack, and the tests' frame built the
+// same way.
 // -----------------------------------------------------------
 
 describe('structural rules — the provider stack', () => {
@@ -518,6 +547,12 @@ describe('structural rules — the provider stack', () => {
 
 // -----------------------------------------------------------
 // The double's world
+// -----------------------------------------------------------
+//
+// The double agrees with itself: every listing a token its
+// seller holds and approved, every token of the story real on
+// the chain, every IPFS-addressed URI resolving but the one
+// meant to be lost.
 // -----------------------------------------------------------
 
 describe('structural rules — the double\'s world', () => {

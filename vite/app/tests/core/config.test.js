@@ -46,6 +46,10 @@ const answer = (fields) => given.json('get', '/api/config', { ...f.config(), ...
 // -----------------------------------------------------------
 // Before the load
 // -----------------------------------------------------------
+//
+// The accessor refuses to answer before a load — and after a
+// load that failed.
+// -----------------------------------------------------------
 
 describe('before the load', () => {
 
@@ -69,6 +73,11 @@ describe('before the load', () => {
 
 // -----------------------------------------------------------
 // What the load keeps
+// -----------------------------------------------------------
+//
+// What a load hands out: the backend's values with the relay
+// made absolute, only the four the GUI uses, the defaults —
+// and a config without an RPC URL refused.
 // -----------------------------------------------------------
 
 describe('what the load keeps', () => {

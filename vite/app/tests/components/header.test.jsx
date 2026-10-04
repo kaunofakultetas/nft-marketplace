@@ -47,6 +47,11 @@ const current = () => within(bar()).queryAllByRole('link').filter((link) => link
 // -----------------------------------------------------------
 // The bar
 // -----------------------------------------------------------
+//
+// The top bar: the navigation landmark, the wordmark leading
+// home, the five pages in order, each leading where it lives,
+// and the wallet button at the end.
+// -----------------------------------------------------------
 
 describe('The bar', () => {
 
@@ -93,6 +98,11 @@ describe('The bar', () => {
 
 // -----------------------------------------------------------
 // The current page's link
+// -----------------------------------------------------------
+//
+// Which link reads as the current page: its own route's, a
+// query string included — none on an NFT's page, Home only on
+// "/" itself.
 // -----------------------------------------------------------
 
 describe('The current page\'s link', () => {

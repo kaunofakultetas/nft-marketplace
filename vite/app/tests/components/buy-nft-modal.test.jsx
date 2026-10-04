@@ -80,6 +80,11 @@ const ok = () => screen.getByRole('button', { name: 'OK' });
 // -----------------------------------------------------------
 // The question
 // -----------------------------------------------------------
+//
+// The modal before anything is sent: nothing while hidden,
+// the question with the price in ether — "???" without one —
+// and Cancel, which asks the wallet for nothing.
+// -----------------------------------------------------------
 
 describe('The question', () => {
 
@@ -120,6 +125,12 @@ describe('The question', () => {
 
 // -----------------------------------------------------------
 // Buying
+// -----------------------------------------------------------
+//
+// OK and what follows: buyListing sent through MetaMask at
+// exactly the listing price, every outcome told in a toast,
+// the modal closing once the purchase is on its way — and a
+// double click never sending a second one.
 // -----------------------------------------------------------
 
 describe('Buying', () => {

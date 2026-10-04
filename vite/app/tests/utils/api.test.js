@@ -28,6 +28,10 @@ import { apiGet } from '@/utils/api';
 // -----------------------------------------------------------
 // Successful answers
 // -----------------------------------------------------------
+//
+// An answer that succeeds comes back parsed, the path asked
+// exactly as given.
+// -----------------------------------------------------------
 
 describe('apiGet — successful answers', () => {
 
@@ -57,6 +61,12 @@ describe('apiGet — successful answers', () => {
 
 // -----------------------------------------------------------
 // Failures
+// -----------------------------------------------------------
+//
+// Every way a read can fail, passed on: the backend's
+// sentence when it carries one, the path and the status
+// otherwise, the platform's own error for what apiGet does
+// not guard against.
 // -----------------------------------------------------------
 
 describe('apiGet — failures', () => {

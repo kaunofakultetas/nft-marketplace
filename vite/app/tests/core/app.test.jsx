@@ -54,6 +54,11 @@ const following = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT
 // -----------------------------------------------------------
 // The shell
 // -----------------------------------------------------------
+//
+// Every route framed the same — the header, the page, the
+// footer — the connect prompt on the pages that need a
+// wallet, and an address no route knows said not to exist.
+// -----------------------------------------------------------
 
 describe('The shell', () => {
 
@@ -99,6 +104,11 @@ describe('The shell', () => {
 
 // -----------------------------------------------------------
 // Moving between pages
+// -----------------------------------------------------------
+//
+// The ways between the pages: the header's links, the
+// wordmark, a card, the owner's way to the sell form, and the
+// browser's Back.
 // -----------------------------------------------------------
 
 describe('Moving between pages', () => {
@@ -163,6 +173,11 @@ describe('Moving between pages', () => {
 
 // -----------------------------------------------------------
 // What each route asks the backend
+// -----------------------------------------------------------
+//
+// Each route asks the backend only for what its page shows,
+// once each — and reaches the chain only through the relay,
+// IPFS only through the local gateway.
 // -----------------------------------------------------------
 
 describe('What each route asks the backend', () => {

@@ -51,6 +51,11 @@ const popups = (metamask) => metamask.methods().filter((method) => ['wallet_requ
 // -----------------------------------------------------------
 // No wallet in the browser
 // -----------------------------------------------------------
+//
+// A browser without MetaMask gets the download link — also
+// when a wallet only announces itself and stays off
+// window.ethereum.
+// -----------------------------------------------------------
 
 describe('No wallet in the browser', () => {
 
@@ -80,6 +85,12 @@ describe('No wallet in the browser', () => {
 
 // -----------------------------------------------------------
 // Connecting
+// -----------------------------------------------------------
+//
+// From "Connect Wallet" to the connected pill: one account
+// request, no popup of the site's own, no second click while
+// MetaMask's popup is open — and the way back when the
+// student declines or a popup is open already.
 // -----------------------------------------------------------
 
 describe('Connecting', () => {
@@ -157,6 +168,10 @@ describe('Connecting', () => {
 // -----------------------------------------------------------
 // A returning student
 // -----------------------------------------------------------
+//
+// A student who connected before is reconnected on load
+// without a popup — through an older wallet too.
+// -----------------------------------------------------------
 
 describe('A returning student', () => {
 
@@ -191,6 +206,11 @@ describe('A returning student', () => {
 
 // -----------------------------------------------------------
 // The connected pill
+// -----------------------------------------------------------
+//
+// The connected state: the balance read through the relay
+// beside the short address — the address alone while the
+// balance is on its way or cannot be read.
 // -----------------------------------------------------------
 
 describe('The connected pill', () => {
@@ -243,6 +263,11 @@ describe('The connected pill', () => {
 // -----------------------------------------------------------
 // The wrong network
 // -----------------------------------------------------------
+//
+// MetaMask on another chain: the red pill, the one-click
+// switch to Sepolia, and staying put when the student
+// declines.
+// -----------------------------------------------------------
 
 describe('The wrong network', () => {
 
@@ -282,6 +307,10 @@ describe('The wrong network', () => {
 
 // -----------------------------------------------------------
 // The student's moves inside MetaMask
+// -----------------------------------------------------------
+//
+// What the student changes inside MetaMask, followed: the
+// chain, the account, and every account locked away.
 // -----------------------------------------------------------
 
 describe('The student\'s moves inside MetaMask', () => {
@@ -323,6 +352,10 @@ describe('The student\'s moves inside MetaMask', () => {
 
 // -----------------------------------------------------------
 // Disconnecting
+// -----------------------------------------------------------
+//
+// A click on the pill disconnects — the site's permission
+// revoked in MetaMask — and the next load stays disconnected.
 // -----------------------------------------------------------
 
 describe('Disconnecting', () => {

@@ -69,6 +69,11 @@ class HoldingsTestCase(unittest.TestCase):
 ############################################################
 # ReplayTests
 ############################################################
+#
+# The holdings rebuilt from the transfer history: the last
+# movement decides, a token is its collection and its id,
+# addresses compare whatever their case.
+############################################################
 
 class ReplayTests(HoldingsTestCase):
 
@@ -125,6 +130,11 @@ class ReplayTests(HoldingsTestCase):
 
 ############################################################
 # CacheTests
+############################################################
+#
+# The cache: a wallet asked once a minute, the stale answer
+# served through a failed refresh, the lock never held
+# during a lookup, and a wallet nobody asks for forgotten.
 ############################################################
 
 class CacheTests(HoldingsTestCase):

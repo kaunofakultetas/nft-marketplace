@@ -34,6 +34,11 @@ const PROBLEM = '⚠ This NFT has a problem';
 // -----------------------------------------------------------
 // The other sources failing
 // -----------------------------------------------------------
+//
+// The page's other two sources failing on their own — the
+// IPFS gateway gone, the RPC relay gone — the backend's data
+// standing either way.
+// -----------------------------------------------------------
 
 describe('The other sources failing', () => {
 

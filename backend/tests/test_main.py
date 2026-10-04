@@ -73,6 +73,11 @@ def run_python(code, env_overrides=None, drop=()):
 ############################################################
 # RequiredSettingsTests
 ############################################################
+#
+# The three required variables, each test in a subprocess:
+# a missing or empty one stops the boot, every missing one
+# named in one message.
+############################################################
 
 class RequiredSettingsTests(unittest.TestCase):
 
@@ -106,6 +111,10 @@ class RequiredSettingsTests(unittest.TestCase):
 
 ############################################################
 # OptionalSettingsTests
+############################################################
+#
+# The optional knobs: their defaults, and the overrides the
+# environment gives them.
 ############################################################
 
 class OptionalSettingsTests(unittest.TestCase):
@@ -176,6 +185,10 @@ class EventTopicTests(unittest.TestCase):
 
 ############################################################
 # ConfigRouteTests
+############################################################
+#
+# GET /api/config: exactly the four public values — the
+# relay's path, never a key — and nothing but reads.
 ############################################################
 
 class ConfigRouteTests(unittest.TestCase):

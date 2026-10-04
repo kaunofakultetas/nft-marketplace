@@ -50,6 +50,11 @@ def post(path, body):
 ############################################################
 # LiveSmokeTests
 ############################################################
+#
+# The running backend, read-only: every public read in the
+# shape the GUI reads, the indexer keeping up, the relay
+# reaching Sepolia — skipped unless RUN_LIVE is set.
+############################################################
 
 @unittest.skipUnless(os.getenv('RUN_LIVE'), 'live smoke is opt-in: set RUN_LIVE=1')
 class LiveSmokeTests(unittest.TestCase):

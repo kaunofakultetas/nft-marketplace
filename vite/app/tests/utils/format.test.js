@@ -36,6 +36,10 @@ const FALLBACK = 'Failed to buy NFT. Please try again.';
 // -----------------------------------------------------------
 // truncateAddress
 // -----------------------------------------------------------
+//
+// An address shortened to its two ends, its case kept — and
+// nothing for no address, or for one that is no text.
+// -----------------------------------------------------------
 
 describe('truncateAddress', () => {
 
@@ -74,6 +78,10 @@ describe('truncateAddress', () => {
 
 // -----------------------------------------------------------
 // parseWei / formatEth
+// -----------------------------------------------------------
+//
+// Amounts read as whole wei — anything else as no amount —
+// and shown in ether the way ethers renders them.
 // -----------------------------------------------------------
 
 describe('parseWei / formatEth', () => {
@@ -121,6 +129,10 @@ describe('parseWei / formatEth', () => {
 
 // -----------------------------------------------------------
 // The Etherscan links
+// -----------------------------------------------------------
+//
+// The links to an address's page and a transaction's page on
+// Sepolia Etherscan.
 // -----------------------------------------------------------
 
 describe('etherscanAddressUrl / etherscanTxUrl', () => {
@@ -198,6 +210,11 @@ describe('formatDateTime', () => {
 
 // -----------------------------------------------------------
 // formatWalletError
+// -----------------------------------------------------------
+//
+// A wallet or RPC dump boiled down to a toast: the short
+// message, the first line with the one it announces, capped
+// at 140 — and one sentence for every way to reject.
 // -----------------------------------------------------------
 
 describe('formatWalletError', () => {

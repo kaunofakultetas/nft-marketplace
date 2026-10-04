@@ -102,6 +102,9 @@ const chip = (label) => screen.getByRole('button', { name: label });
 // -----------------------------------------------------------
 // Without a wallet
 // -----------------------------------------------------------
+//
+// Without a wallet the page only asks to connect.
+// -----------------------------------------------------------
 
 describe('Without a wallet', () => {
 
@@ -121,6 +124,11 @@ describe('Without a wallet', () => {
 
 // -----------------------------------------------------------
 // The feed
+// -----------------------------------------------------------
+//
+// The feed: the newest hundred events asked for, "Loading..."
+// meanwhile, then a row per event — chip, NFT, price, actor,
+// local time, block and transaction — or "No activity yet".
 // -----------------------------------------------------------
 
 describe('The feed', () => {
@@ -215,6 +223,14 @@ describe('The feed', () => {
     await user.click(screen.getByRole('link', { name: '← Back to Marketplace' }));
     expect(currentPath()).toBe('/');
   });
+
+  it('shows an event type it does not know under its own name, and a row without a transaction a dash', async () => {
+    given.json('get', '/api/activity', { activity: [{ ...f.activity().activity[0], type: 'Transferred', txHash: null }] });
+    renderHistory();
+    await feedLoaded(1);
+    expect(feed()[0][0]).toBe('Transferred');
+    expect(rows()[0][6]).toHaveTextContent(/^—$/);
+  });
 });
 
 
@@ -225,6 +241,11 @@ describe('The feed', () => {
 
 // -----------------------------------------------------------
 // Filtering
+// -----------------------------------------------------------
+//
+// The chips narrow the feed in the browser, asking the
+// backend nothing new; a filter matching nothing says so in
+// its own words.
 // -----------------------------------------------------------
 
 describe('Filtering', () => {
@@ -271,14 +292,6 @@ describe('Filtering', () => {
     expect(screen.queryByText(EMPTY)).toBeNull();
   });
 
-
-  it('shows an event type it does not know under its own name, and a row without a transaction a dash', async () => {
-    given.json('get', '/api/activity', { activity: [{ ...f.activity().activity[0], type: 'Transferred', txHash: null }] });
-    renderHistory();
-    await feedLoaded(1);
-    expect(feed()[0][0]).toBe('Transferred');
-    expect(rows()[0][6]).toHaveTextContent(/^—$/);
-  });
 });
 
 

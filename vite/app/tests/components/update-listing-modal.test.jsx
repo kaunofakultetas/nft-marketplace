@@ -87,6 +87,11 @@ const sentCalls = (metamask) => metamask.sent.map(({ to, call }) => ({ to, call 
 // -----------------------------------------------------------
 // The modal
 // -----------------------------------------------------------
+//
+// The modal itself: nothing while hidden, its three actions
+// and the ways to close it, the price field named by its
+// label.
+// -----------------------------------------------------------
 
 describe('The modal', () => {
 
@@ -130,6 +135,12 @@ describe('The modal', () => {
 
 // -----------------------------------------------------------
 // A new price
+// -----------------------------------------------------------
+//
+// Update Price: a price that is not above zero refused before
+// any popup, updateListing sent with the price in wei, a
+// decline keeping the modal open, and a reopened modal
+// sending only what its field shows.
 // -----------------------------------------------------------
 
 describe('A new price', () => {
@@ -208,6 +219,10 @@ describe('A new price', () => {
 
 // -----------------------------------------------------------
 // Cancelling the listing
+// -----------------------------------------------------------
+//
+// Cancel Listing: cancelListing sent through MetaMask and the
+// modal closed — or kept open when the student declines.
 // -----------------------------------------------------------
 
 describe('Cancelling the listing', () => {

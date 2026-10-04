@@ -86,6 +86,11 @@ const diagnosed = (key) => {
 // -----------------------------------------------------------
 // Healthy tokens
 // -----------------------------------------------------------
+//
+// What a healthy token hands back: the loading state, then
+// the name, description, attributes and gateway image — its
+// metadata read once however many components show it.
+// -----------------------------------------------------------
 
 describe('Healthy tokens', () => {
 
@@ -286,6 +291,10 @@ describe('Wrongly minted tokens', () => {
 // -----------------------------------------------------------
 // The metadata file cannot be delivered
 // -----------------------------------------------------------
+//
+// A metadata file the gateway cannot deliver — gone, dropped,
+// or past the IPFS deadline — diagnosed as unreachable.
+// -----------------------------------------------------------
 
 describe('The metadata file cannot be delivered', () => {
 
@@ -315,6 +324,10 @@ describe('The metadata file cannot be delivered', () => {
 
 // -----------------------------------------------------------
 // The chain cannot be read
+// -----------------------------------------------------------
+//
+// A relay that is down is not the token's fault: the hook
+// says the chain cannot be read.
 // -----------------------------------------------------------
 
 describe('The chain cannot be read', () => {

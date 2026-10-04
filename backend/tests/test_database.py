@@ -34,6 +34,10 @@ from app.database.db_init import init_db
 ############################################################
 # ConnectionTests
 ############################################################
+#
+# The connection: its default file taken from DB_PATH when
+# the module is imported, its rows read by column name.
+############################################################
 
 class ConnectionTests(helpers.DbTestCase):
 
@@ -58,6 +62,11 @@ class ConnectionTests(helpers.DbTestCase):
 
 ############################################################
 # SchemaTests
+############################################################
+#
+# The schema init_db builds: the four tables with their
+# columns, built again without touching the data, and the
+# indexes the per-token and per-type reads use.
 ############################################################
 
 class SchemaTests(helpers.DbTestCase):
@@ -106,6 +115,11 @@ class SchemaTests(helpers.DbTestCase):
 
 ############################################################
 # UniquenessTests
+############################################################
+#
+# The constraints that keep the tables honest: an event is
+# its transaction and log index, one listing per token, one
+# archive row per token and kind, one value per state key.
 ############################################################
 
 class UniquenessTests(helpers.DbTestCase):
@@ -158,6 +172,10 @@ class UniquenessTests(helpers.DbTestCase):
 
 ############################################################
 # Uint256Tests
+############################################################
+#
+# uint256 token ids and prices kept exactly, as TEXT — and
+# the required fields required.
 ############################################################
 
 class Uint256Tests(helpers.DbTestCase):

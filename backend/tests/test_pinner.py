@@ -139,6 +139,10 @@ class PinnerTestCase(helpers.DbTestCase):
 ############################################################
 # ShapeTests
 ############################################################
+#
+# The pure parts: every IPFS URI shape reduced to its path,
+# everything else not IPFS, and the ABI string decoded.
+############################################################
 
 class ShapeTests(unittest.TestCase):
 
@@ -183,6 +187,10 @@ class ShapeTests(unittest.TestCase):
 ############################################################
 # TokenUriTests
 ############################################################
+#
+# The tokenURI read: the id encoded in full as one word, an
+# empty answer an error.
+############################################################
 
 class TokenUriTests(PinnerTestCase):
 
@@ -211,6 +219,13 @@ class TokenUriTests(PinnerTestCase):
 
 ############################################################
 # OutcomeTests
+############################################################
+#
+# What becomes of each file: pinned by its root CID,
+# skipped when not on IPFS, invalid when wrongly minted,
+# pending while nobody serves it, unreachable at the
+# attempt cap — a failed row naming the file it could not
+# get.
 ############################################################
 
 class OutcomeTests(PinnerTestCase):
@@ -386,6 +401,11 @@ class MalformedMetadataTests(PinnerTestCase):
 ############################################################
 # RescueTests
 ############################################################
+#
+# The second rung: a CID the network lacks fetched from the
+# gateway caches as a verified CAR, in order — the first
+# that has it ending the search, junk passed over.
+############################################################
 
 class RescueTests(PinnerTestCase):
 
@@ -452,6 +472,11 @@ class RescueTests(PinnerTestCase):
 
 ############################################################
 # WorkTests
+############################################################
+#
+# What a cycle costs and in which order: an archived token
+# nothing, a token never tried first, one token's failure
+# never the others' — and the loop around it all.
 ############################################################
 
 class WorkTests(PinnerTestCase):

@@ -72,6 +72,11 @@ const rootElement = () => document.getElementById('root');
 // -----------------------------------------------------------
 // Startup
 // -----------------------------------------------------------
+//
+// From the config to the app: nothing rendered while the
+// config is in flight, the whole app once it is in, the chain
+// read through the relay it names.
+// -----------------------------------------------------------
 
 describe('startup', () => {
 
@@ -117,6 +122,10 @@ describe('startup', () => {
 
 // -----------------------------------------------------------
 // The "Backend unavailable" screen
+// -----------------------------------------------------------
+//
+// A config that cannot be loaded: the screen saying why
+// instead of the app, and its Retry reloading the page.
 // -----------------------------------------------------------
 
 describe('the "Backend unavailable" screen', () => {

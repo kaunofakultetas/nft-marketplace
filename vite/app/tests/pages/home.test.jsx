@@ -83,6 +83,10 @@ async function gridLoaded() {
 // -----------------------------------------------------------
 // Without a wallet
 // -----------------------------------------------------------
+//
+// Without a wallet only the connect prompt — no stats, no
+// grid — and the store once the student connects.
+// -----------------------------------------------------------
 
 describe('Without a wallet', () => {
 
@@ -113,6 +117,11 @@ describe('Without a wallet', () => {
 
 // -----------------------------------------------------------
 // The stats bar
+// -----------------------------------------------------------
+//
+// The bar above the grid: the four figures, the contract on
+// Etherscan, the indexer's block and its time — staying away
+// while it loads.
 // -----------------------------------------------------------
 
 describe('The stats bar', () => {
@@ -176,6 +185,11 @@ describe('The stats bar', () => {
 
 // -----------------------------------------------------------
 // The grid
+// -----------------------------------------------------------
+//
+// The storefront: "Loading..." while the listings load, then
+// a card per listing in the backend's order, each opening its
+// NFT — or the empty marketplace's nudge.
 // -----------------------------------------------------------
 
 describe('The grid', () => {
@@ -244,6 +258,11 @@ describe('The grid', () => {
 
 // -----------------------------------------------------------
 // Sorting
+// -----------------------------------------------------------
+//
+// The sort control: newest first by default, both price
+// orders compared as big integers, a price it cannot read
+// last, the control named for assistive tech.
 // -----------------------------------------------------------
 
 describe('Sorting', () => {

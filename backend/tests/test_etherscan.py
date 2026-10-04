@@ -89,6 +89,11 @@ class ClientTestCase(unittest.TestCase):
 ############################################################
 # PlumbingTests
 ############################################################
+#
+# What every call shares — the endpoint, the chain, the key
+# and the timeout — and every failure told without the
+# request's URL; hex_int reading Etherscan's bare zero.
+############################################################
 
 class PlumbingTests(ClientTestCase):
 
@@ -145,6 +150,12 @@ class PlumbingTests(ClientTestCase):
 
 ############################################################
 # ChainTests
+############################################################
+#
+# The chain reads: the tip, the deployment block and time,
+# and every log from a block on, page after page — an empty
+# history a result, any other refusal an error in
+# Etherscan's own words.
 ############################################################
 
 class ChainTests(ClientTestCase):
@@ -236,6 +247,10 @@ class ChainTests(ClientTestCase):
 ############################################################
 # ProxyCallTests
 ############################################################
+#
+# The proxy's eth_call: the raw hex back, a node's error
+# object and a result that is no hex both errors.
+############################################################
 
 class ProxyCallTests(ClientTestCase):
 
@@ -269,6 +284,11 @@ class ProxyCallTests(ClientTestCase):
 
 ############################################################
 # WalletTests
+############################################################
+#
+# A wallet's NFT transfer history, oldest first — a fresh
+# wallet an empty list, any other refusal an error in
+# Etherscan's own words.
 ############################################################
 
 class WalletTests(ClientTestCase):

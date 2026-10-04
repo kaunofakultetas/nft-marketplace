@@ -19,6 +19,10 @@ import Footer from '@/components/Footer';
 // -----------------------------------------------------------
 // Footer
 // -----------------------------------------------------------
+//
+// The bottom bar: the page's contentinfo landmark with the
+// copyright line, nothing to click.
+// -----------------------------------------------------------
 
 describe('Footer', () => {
 

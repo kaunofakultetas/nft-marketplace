@@ -46,6 +46,12 @@ const short = (address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
 // -----------------------------------------------------------
 // harness smoke
 // -----------------------------------------------------------
+//
+// One pass through every double and guard of the harness: the
+// config, a page's reads end to end, an owner read, a backend
+// refusal, a wallet's transaction mined, the App booted, and
+// the guards that fail a test.
+// -----------------------------------------------------------
 
 describe('harness smoke', () => {
 

@@ -44,6 +44,10 @@ const nameOf = (name) => screen.findByRole('heading', { level: 3, name });
 // -----------------------------------------------------------
 // Loading
 // -----------------------------------------------------------
+//
+// Until the metadata is in, the card is a skeleton — and
+// already opens the token's page.
+// -----------------------------------------------------------
 
 describe('Loading', () => {
 
@@ -75,6 +79,12 @@ describe('Loading', () => {
 
 // -----------------------------------------------------------
 // The card
+// -----------------------------------------------------------
+//
+// The card once the metadata is in: the image first, the
+// name, the price in ether — "Not for sale" without one,
+// "Price unknown" when it cannot be known — the description
+// and the id, the whole card a link.
 // -----------------------------------------------------------
 
 describe('The card', () => {
@@ -152,6 +162,11 @@ describe('The card', () => {
 // -----------------------------------------------------------
 // Who owns it
 // -----------------------------------------------------------
+//
+// The owner line: the seller by the short address, "you" for
+// the student's own listing and for a token passed without a
+// seller.
+// -----------------------------------------------------------
 
 describe('Who owns it', () => {
 
@@ -191,6 +206,11 @@ describe('Who owns it', () => {
 
 // -----------------------------------------------------------
 // A wrongly minted token
+// -----------------------------------------------------------
+//
+// A wrongly minted token wears its diagnosis where the
+// description would be, and shows whatever image it can — or
+// the grey placeholder.
 // -----------------------------------------------------------
 
 describe('A wrongly minted token', () => {

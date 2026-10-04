@@ -105,6 +105,9 @@ const proceedsLine = () => screen.getByText(/^Withdraw .* ETH proceeds$/);
 // -----------------------------------------------------------
 // Without a wallet
 // -----------------------------------------------------------
+//
+// Without a wallet the page only asks to connect.
+// -----------------------------------------------------------
 
 describe('Without a wallet', () => {
 
@@ -124,6 +127,10 @@ describe('Without a wallet', () => {
 
 // -----------------------------------------------------------
 // The form
+// -----------------------------------------------------------
+//
+// The listing form: its three fields, named by their labels,
+// empty or prefilled from an NFT's page.
 // -----------------------------------------------------------
 
 describe('The form', () => {
@@ -182,6 +189,11 @@ describe('The form', () => {
 // -----------------------------------------------------------
 // The student's NFTs
 // -----------------------------------------------------------
+//
+// The picker: a chip per unlisted NFT the wallet holds,
+// filling the form on a tap — and none when it cannot vouch
+// for what it would offer.
+// -----------------------------------------------------------
 
 describe('The student\'s NFTs', () => {
 
@@ -231,6 +243,12 @@ describe('The student\'s NFTs', () => {
 
 // -----------------------------------------------------------
 // Listing
+// -----------------------------------------------------------
+//
+// Approve, then list: every refusal before the wallet is
+// asked, the toasts narrating each step, the listing asked
+// for only once the approval is mined — never after one that
+// reverted or cannot be confirmed.
 // -----------------------------------------------------------
 
 describe('Listing', () => {
@@ -383,6 +401,11 @@ describe('Listing', () => {
 
 // -----------------------------------------------------------
 // Proceeds
+// -----------------------------------------------------------
+//
+// The proceeds card: the connected account's earnings, read
+// from the contract, withdrawn in one transaction and read
+// again once mined.
 // -----------------------------------------------------------
 
 describe('Proceeds', () => {

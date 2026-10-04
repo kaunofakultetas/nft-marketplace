@@ -114,6 +114,12 @@ class IndexerTestCase(helpers.DbTestCase):
 ############################################################
 # DecodeTests
 ############################################################
+#
+# One raw log into its row, event by event: the actor,
+# prices and token ids as decimal strings however wide,
+# addresses lowercased, the bare zero read as zero — and a
+# log of another shape skipped.
+############################################################
 
 class DecodeTests(unittest.TestCase):
 
@@ -190,6 +196,12 @@ class DecodeTests(unittest.TestCase):
 
 ############################################################
 # ReplayTests
+############################################################
+#
+# The story stored and turned into exactly the listings the
+# GUI assumes: chain order whatever the arrival order, no
+# event stored twice, the scan position and its time
+# written with the batch — all of it or nothing.
 ############################################################
 
 class ReplayTests(IndexerTestCase):
@@ -343,6 +355,11 @@ class ReorgTests(IndexerTestCase):
 
 ############################################################
 # ResetTests
+############################################################
+#
+# A database built for another contract, wiped of its
+# derived state, scan time included, the archive kept — and
+# the same contract, whatever its case, left alone.
 ############################################################
 
 class ResetTests(IndexerTestCase):

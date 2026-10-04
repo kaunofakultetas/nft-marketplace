@@ -34,6 +34,12 @@ const thumb = () => screen.getByRole('link');
 // -----------------------------------------------------------
 // NftThumb
 // -----------------------------------------------------------
+//
+// The activity feed's thumbnail: a link to the token's page,
+// a pulse while the metadata resolves, then the image, the
+// name and the id — or a warning sign for a wrongly minted
+// token.
+// -----------------------------------------------------------
 
 describe('NftThumb', () => {
 

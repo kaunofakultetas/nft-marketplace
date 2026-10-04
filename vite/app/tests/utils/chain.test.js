@@ -43,6 +43,11 @@ const relayDown = () => new HttpRequestError({ url: 'http://localhost:3000/api/r
 // -----------------------------------------------------------
 // contractRefused
 // -----------------------------------------------------------
+//
+// Which failed reads are the contract's own answer — a
+// revert, no contract at the address — and which the relay
+// failing on the way.
+// -----------------------------------------------------------
 
 describe('contractRefused', () => {
 
@@ -77,6 +82,11 @@ describe('contractRefused', () => {
 
 // -----------------------------------------------------------
 // waitForReceipt
+// -----------------------------------------------------------
+//
+// The receipt asked for every two seconds until the
+// transaction is mined, handed back as it is — and the wait
+// ended at once when the relay fails.
 // -----------------------------------------------------------
 
 describe('waitForReceipt', () => {

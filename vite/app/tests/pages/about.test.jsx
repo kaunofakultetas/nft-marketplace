@@ -79,6 +79,10 @@ async function factsLoaded() {
 // -----------------------------------------------------------
 // The page
 // -----------------------------------------------------------
+//
+// The page itself: open without a wallet, its four cards in
+// order.
+// -----------------------------------------------------------
 
 describe('The page', () => {
 
@@ -108,6 +112,11 @@ describe('The page', () => {
 
 // -----------------------------------------------------------
 // The instance
+// -----------------------------------------------------------
+//
+// The live facts from the stats — "…" while they load and
+// when they cannot be read, a dash for a volume it cannot
+// read — and the contract linked on Etherscan.
 // -----------------------------------------------------------
 
 describe('The instance', () => {
@@ -159,6 +168,13 @@ describe('The instance', () => {
     expect(fact('Network')).toHaveTextContent(/^…$/);
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(4);
   });
+
+  it('shows a dash for a volume it cannot read', async () => {
+    given.json('get', '/api/stats', { ...f.stats(), totalVolumeWei: null });
+    renderAbout();
+    await factsLoaded();
+    expect(fact('Lifetime sales')).toHaveTextContent(`${f.stats().totalSales} (— ETH volume)`);
+  });
 });
 
 
@@ -169,6 +185,9 @@ describe('The instance', () => {
 
 // -----------------------------------------------------------
 // How it works
+// -----------------------------------------------------------
+//
+// The four moving parts of the pipeline, in order.
 // -----------------------------------------------------------
 
 describe('How it works', () => {
@@ -197,6 +216,10 @@ describe('How it works', () => {
 
 // -----------------------------------------------------------
 // The IPFS archive
+// -----------------------------------------------------------
+//
+// The archive's chips — a count per status with what it means
+// — and none while nothing is archived yet.
 // -----------------------------------------------------------
 
 describe('The IPFS archive', () => {
@@ -241,6 +264,11 @@ describe('The IPFS archive', () => {
 
 // -----------------------------------------------------------
 // The contract interface
+// -----------------------------------------------------------
+//
+// The functions students call, each with its note, and the
+// events the backend sends, with their signatures, meanings
+// and topic hashes.
 // -----------------------------------------------------------
 
 describe('The contract interface', () => {
@@ -287,13 +315,6 @@ describe('The contract interface', () => {
     expect(screen.getByText(/just by reading these/)).toHaveTextContent('just by reading these events');
   });
 
-
-  it('shows a dash for a volume it cannot read', async () => {
-    given.json('get', '/api/stats', { ...f.stats(), totalVolumeWei: null });
-    renderAbout();
-    await factsLoaded();
-    expect(fact('Lifetime sales')).toHaveTextContent(`${f.stats().totalSales} (— ETH volume)`);
-  });
 });
 
 

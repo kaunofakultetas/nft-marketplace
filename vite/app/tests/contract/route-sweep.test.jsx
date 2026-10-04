@@ -99,6 +99,12 @@ const PINS = {};
 // -----------------------------------------------------------
 // Assertions shared by the states
 // -----------------------------------------------------------
+//
+// What every state of every route checks or stages: the
+// chrome still standing, safe markup, a failure mode
+// answering every GET, and a failed read presented the
+// route's own way.
+// -----------------------------------------------------------
 
 // The chrome around every page: the header's navigation and
 // the footer
@@ -143,6 +149,12 @@ const expectFailureShown = async (route, message) => {
 
 // -----------------------------------------------------------
 // The sweep
+// -----------------------------------------------------------
+//
+// Every route App.jsx declares — the first test proves none
+// is missing — under every state: the default backend, every
+// GET failing, answering a JSON string or dropping the
+// connection, and the relay down.
 // -----------------------------------------------------------
 
 describe('route sweep', () => {

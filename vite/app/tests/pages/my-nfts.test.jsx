@@ -83,6 +83,10 @@ async function cardsLoaded() {
 // -----------------------------------------------------------
 // Without a wallet
 // -----------------------------------------------------------
+//
+// Without a wallet only the connect prompt, and no holdings
+// asked for.
+// -----------------------------------------------------------
 
 describe('Without a wallet', () => {
 
@@ -104,6 +108,11 @@ describe('Without a wallet', () => {
 
 // -----------------------------------------------------------
 // The wallet's NFTs
+// -----------------------------------------------------------
+//
+// The connected account's holdings: asked for by its address,
+// counted in words, a card each — priced from the listings
+// once they arrive — with Refresh.
 // -----------------------------------------------------------
 
 describe('The wallet\'s NFTs', () => {
@@ -204,6 +213,11 @@ describe('The wallet\'s NFTs', () => {
 
 // -----------------------------------------------------------
 // An empty wallet, a failure, another account
+// -----------------------------------------------------------
+//
+// The other ways the page can go: an empty wallet, a backend
+// failure with Try Again, another account picked in MetaMask,
+// every account locked away.
 // -----------------------------------------------------------
 
 describe('An empty wallet, a failure, another account', () => {

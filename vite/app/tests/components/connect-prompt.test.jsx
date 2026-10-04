@@ -26,6 +26,11 @@ const MESSAGE = 'Please connect your wallet to view your NFTs';
 // -----------------------------------------------------------
 // ConnectPrompt
 // -----------------------------------------------------------
+//
+// The gate every wallet-bound page shows: its message beside
+// the logo, and the wallet button in whichever state the
+// browser's wallet calls for.
+// -----------------------------------------------------------
 
 describe('ConnectPrompt', () => {
 

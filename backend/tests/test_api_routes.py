@@ -148,6 +148,12 @@ class RouteTestCase(helpers.DbTestCase):
 ############################################################
 # StatsTests
 ############################################################
+#
+# The marketplace at a glance: the totals, summed exactly
+# however wide the amounts, the indexer's position and the
+# archive counts — and the deployment facts, looked up once
+# per process, a failed lookup only delaying them.
+############################################################
 
 class StatsTests(RouteTestCase):
 
@@ -210,6 +216,10 @@ class StatsTests(RouteTestCase):
 ############################################################
 # StorefrontTests
 ############################################################
+#
+# The active listings in the shape the storefront reads,
+# newest listing block first — and an empty storefront.
+############################################################
 
 class StorefrontTests(RouteTestCase):
 
@@ -236,6 +246,12 @@ class StorefrontTests(RouteTestCase):
 
 ############################################################
 # ActivityTests
+############################################################
+#
+# The feed of the whole story, newest first, and its limit:
+# a hundred unless asked, never more than 500, a negative
+# one held at nothing, one that is no whole number a 400.
+# seed_many fills the table with events of its own.
 ############################################################
 
 class ActivityTests(RouteTestCase):
@@ -286,6 +302,12 @@ class ActivityTests(RouteTestCase):
 
 ############################################################
 # TokenTests
+############################################################
+#
+# One token as its page reads it: its listing, gone once
+# sold, its history newest first and its archive — a
+# wrongly minted token's included — the address in the path
+# lowercased, and a token the marketplace never saw.
 ############################################################
 
 class TokenTests(RouteTestCase):
@@ -343,6 +365,13 @@ class TokenTests(RouteTestCase):
 
 ############################################################
 # WalletTests
+############################################################
+#
+# The wallet's holdings through the cache, whatever the
+# case of its address — and a failure as a 502 that says
+# why without ever showing the Etherscan key, checked
+# against a real client (behind_the_real_client) and the
+# errors requests itself words.
 ############################################################
 
 class WalletTests(RouteTestCase):
@@ -482,6 +511,10 @@ class RelayTests(RouteTestCase):
 
 ############################################################
 # UnknownRouteTests
+############################################################
+#
+# What no route serves is a 404 — an unknown path, and a
+# token route without its id.
 ############################################################
 
 class UnknownRouteTests(RouteTestCase):

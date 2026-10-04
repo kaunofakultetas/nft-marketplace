@@ -30,6 +30,11 @@ import { toGatewayURL, fetchWithTimeout } from '@/utils/ipfs';
 // -----------------------------------------------------------
 // toGatewayURL
 // -----------------------------------------------------------
+//
+// Every IPFS-addressed URI moved onto the local gateway at
+// the configured prefix — everything else left where it
+// lives.
+// -----------------------------------------------------------
 
 describe('toGatewayURL', () => {
 
@@ -91,6 +96,11 @@ describe('toGatewayURL', () => {
 
 // -----------------------------------------------------------
 // fetchWithTimeout
+// -----------------------------------------------------------
+//
+// A fetch held to the IPFS deadline: the answer as it is, a
+// sentence naming the deadline and the URL when it passes,
+// other failures untouched, no timer left behind.
 // -----------------------------------------------------------
 
 describe('fetchWithTimeout', () => {
