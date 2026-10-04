@@ -137,8 +137,8 @@ describe('The archive', () => {
     const card = (await screen.findByRole('heading', { level: 3, name: 'IPFS Archive' })).parentElement;
     expect(card).toHaveTextContent('The course IPFS node pins every marketplace NFT\'s files so they outlive their original host.');
     expect(archiveRows()).toEqual([
-      ['metadata', `${f.PUG_JSON_CID.slice(0, 12)}...`, 'pinned'],
       ['image', `${f.PUG_IMAGE_CID.slice(0, 12)}...`, 'pinned'],
+      ['metadata', `${f.PUG_JSON_CID.slice(0, 12)}...`, 'pinned'],
     ]);
   });
 
@@ -154,8 +154,8 @@ describe('The archive', () => {
     renderDetail(f.ART, '1');
     await screen.findByRole('heading', { level: 3, name: 'IPFS Archive' });
     expect(archiveRows()).toEqual([
-      ['metadata', `${f.ART_1_IMAGE_CID.slice(0, 12)}...`, 'pinned'],
       ['image', '', 'invalid'],
+      ['metadata', `${f.ART_1_IMAGE_CID.slice(0, 12)}...`, 'pinned'],
     ]);
   });
 
@@ -164,13 +164,13 @@ describe('The archive', () => {
     given.json('get', '/api/nft/:nftAddress/:tokenId', {
       ...f.nft(f.PUGS, '0'),
       archive: [
-        { cid: null, kind: 'metadata', status: 'pending' },
         { cid: null, kind: 'image', status: 'unreachable' },
+        { cid: null, kind: 'metadata', status: 'pending' },
       ],
     });
     renderDetail(f.PUGS, '0');
     await screen.findByRole('heading', { level: 3, name: 'IPFS Archive' });
-    expect(archiveRows()).toEqual([['metadata', '', 'pending'], ['image', '', 'unreachable']]);
+    expect(archiveRows()).toEqual([['image', '', 'unreachable'], ['metadata', '', 'pending']]);
   });
 
 

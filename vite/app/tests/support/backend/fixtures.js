@@ -315,17 +315,19 @@ export const EVENT_TOPICS = {
 // The pinner's rows (Pinned_Files) for every token the
 // marketplace has seen — both files pinned for the healthy
 // ones; for a token whose metadata cannot name an image, the
-// image row is 'invalid'
+// image row is 'invalid'. In the order /api/nft answers them:
+// by kind name, the image first (the backend's own suite pins
+// that order)
 const pinned = (cid, kind) => ({ cid, kind, status: 'pinned' });
 const invalidImage = { cid: null, kind: 'image', status: 'invalid' };
 
 export const ARCHIVE = {
-  [`${PUGS}-0`]: [pinned(PUG_JSON_CID, 'metadata'), pinned(PUG_IMAGE_CID, 'image')],
-  [`${PUGS}-1`]: [pinned(PUG_JSON_CID, 'metadata'), pinned(PUG_IMAGE_CID, 'image')],
-  [`${PUGS}-2`]: [pinned(PUG_JSON_CID, 'metadata'), pinned(PUG_IMAGE_CID, 'image')],
-  [`${ART}-0`]: [pinned(ART_DIR, 'metadata'), pinned(ART_DIR, 'image')],
-  [`${ART}-1`]: [pinned(ART_1_IMAGE_CID, 'metadata'), invalidImage],
-  [`${ART}-3`]: [pinned(ART_DIR, 'metadata'), invalidImage],
+  [`${PUGS}-0`]: [pinned(PUG_IMAGE_CID, 'image'), pinned(PUG_JSON_CID, 'metadata')],
+  [`${PUGS}-1`]: [pinned(PUG_IMAGE_CID, 'image'), pinned(PUG_JSON_CID, 'metadata')],
+  [`${PUGS}-2`]: [pinned(PUG_IMAGE_CID, 'image'), pinned(PUG_JSON_CID, 'metadata')],
+  [`${ART}-0`]: [pinned(ART_DIR, 'image'), pinned(ART_DIR, 'metadata')],
+  [`${ART}-1`]: [invalidImage, pinned(ART_1_IMAGE_CID, 'metadata')],
+  [`${ART}-3`]: [invalidImage, pinned(ART_DIR, 'metadata')],
 };
 
 
