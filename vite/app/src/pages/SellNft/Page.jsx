@@ -45,11 +45,18 @@ import { truncateAddress, formatEth, formatWalletError } from '@/utils/format';
 import ConnectPrompt from '@/components/ConnectPrompt';
 
 
-// What the page says when a transaction it waits for cannot
-// be confirmed, or turns out reverted
+// An approval mined but reverted — most likely a token that
+// is not the student's to approve
 const APPROVAL_REVERTED = 'The approval reverted on-chain — check that this NFT is yours. Nothing was listed.';
+
+// An approval sent that the relay cannot confirm — it may
+// still be mined, so the student checks before trying again
 const APPROVAL_UNCONFIRMED = 'Could not confirm the approval — the chain cannot be read right now. Check the transaction on Etherscan before listing again.';
+
+// A withdrawal mined but reverted
 const WITHDRAWAL_REVERTED = 'The withdrawal reverted on-chain — nothing was withdrawn.';
+
+// A withdrawal sent that the relay cannot confirm
 const WITHDRAWAL_UNCONFIRMED = 'The withdrawal was sent, but cannot be confirmed — the chain cannot be read right now.';
 
 
@@ -127,6 +134,8 @@ function OwnedNftPicker({ selectedKey, onPick }) {
   });
 
 
+  // KNOWN GAP: unlike My NFTs, the picker takes either answer's
+  // list on trust — one that is no list throws while rendering
   const listedKeys = new Set(
     (listingsData?.listings || []).map((item) => `${item.nftAddress}-${item.tokenId}`)
   );
@@ -177,6 +186,11 @@ function OwnedNftPicker({ selectedKey, onPick }) {
 // -----------------------------------------------------------
 // SellNftPage (default export)
 // -----------------------------------------------------------
+//
+// The page: the prefill notice, the listing form with its
+// picker, then the proceeds card. Holds the approve-then-
+// list flow and the withdrawal; without a wallet, the
+// connect prompt alone.
 //
 // Used by:
 //   - App.jsx — route "/sell-nft"

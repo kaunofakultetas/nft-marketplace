@@ -28,12 +28,6 @@ import { contractRefused } from '@/utils/chain';
 import { toGatewayURL, fetchWithTimeout } from '@/utils/ipfs';
 
 
-// The grey placeholder shown while a token has no usable
-// image, with the token id baked into the SVG
-const placeholderImage = (tokenId) =>
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' dy='100' text-anchor='middle' x='100'%3ENFT %23" + tokenId + "%3C/tspan%3E%3C/text%3E%3C/svg%3E";
-
-
 // Every way a student can mint a token wrong (or lose its
 // files), each with the short label the cards show and the
 // how-to-fix hint the detail page shows
@@ -93,6 +87,28 @@ const UNREADABLE = {
 
 
 // -----------------------------------------------------------
+// placeholderImage
+// -----------------------------------------------------------
+//
+// The grey placeholder square shown while a token has no
+// usable image, the token's id written into the SVG — a data
+// URI, so it never waits on a gateway.
+//
+// Used by:
+//   - fallbackMetadata (below)
+// -----------------------------------------------------------
+
+function placeholderImage(tokenId) {
+  return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' dy='100' text-anchor='middle' x='100'%3ENFT %23" + tokenId + "%3C/tspan%3E%3C/text%3E%3C/svg%3E";
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
 // fallbackMetadata
 // -----------------------------------------------------------
 //
@@ -137,7 +153,7 @@ function textOf(value) {
 
 
 // -----------------------------------------------------------
-// useNftMetadata (named export)
+// useNftMetadata
 // -----------------------------------------------------------
 //
 // Hands back four things. metadata holds the name,
@@ -245,10 +261,12 @@ export function useNftMetadata(nftAddress, tokenId) {
     };
   }
 
+
   // An empty tokenURI leaves nothing to fetch
   if (tokenURI === '') {
     return { metadata: fallbackMetadata(tokenId), problem: PROBLEMS['empty-uri'], metadataURL: null, loading: false };
   }
+
 
   return {
     metadata: data?.metadata,

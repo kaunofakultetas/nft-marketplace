@@ -10,8 +10,8 @@
 //
 //  Gateway prefix and timeout come from the runtime config
 //  (config.js) — read lazily inside each call, never at
-//  module load, because this module is imported before
-//  loadConfig() resolves.
+//  module load, because this module is imported before the
+//  config has loaded.
 // -----------------------------------------------------------
 
 import { getConfig } from '@/config';
@@ -31,8 +31,8 @@ import { getConfig } from '@/config';
 // pass through untouched (plain https metadata hosts work).
 //
 // Used by:
-//   - components/NFTBox — metadata and image URLs
-//   - pages/NftDetail   — metadata and image URLs
+//   - hooks/useNftMetadata — the metadata file, the image and
+//     the "View JSON" link
 // -----------------------------------------------------------
 
 export function toGatewayURL(uri) {
@@ -74,14 +74,14 @@ export function toGatewayURL(uri) {
 // fetchWithTimeout
 // -----------------------------------------------------------
 //
-// fetch() with an AbortController deadline — an unpinned CID
+// A fetch with an AbortController deadline — an unpinned CID
 // otherwise hangs the gateway request forever and the card
 // never leaves its loading state. The default deadline is the
-// configured ipfsTimeout.
+// configured ipfsTimeout; a deadline that passes is thrown as
+// a sentence naming it and the URL.
 //
 // Used by:
-//   - components/NFTBox — metadata fetch
-//   - pages/NftDetail   — metadata fetch
+//   - hooks/useNftMetadata — the metadata fetch
 // -----------------------------------------------------------
 
 export async function fetchWithTimeout(url, timeout) {

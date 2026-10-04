@@ -15,6 +15,8 @@
 // Footer (default export)
 // -----------------------------------------------------------
 //
+// The bar itself — one line of text, no links.
+//
 // Used by:
 //   - App.jsx — the page shell
 // -----------------------------------------------------------

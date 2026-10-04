@@ -33,6 +33,12 @@ import ConnectPrompt from '@/components/ConnectPrompt';
 // MyNftsPage (default export)
 // -----------------------------------------------------------
 //
+// The page: the wallet's tokens as cards, each priced from
+// the listings, with Refresh — or, in their place, the
+// loading line, the backend's failure with Try Again, or the
+// empty wallet's way to the marketplace. Without a wallet,
+// the connect prompt alone.
+//
 // Used by:
 //   - App.jsx — route "/my-nfts"
 // -----------------------------------------------------------

@@ -46,6 +46,10 @@ import NotFoundPage from '@/pages/NotFound/Page';
 // App (default export)
 // -----------------------------------------------------------
 //
+// The shell every page shares and the route table: the
+// toast outlet above the router, then the header, the routed
+// page and the footer, a catch-all route last.
+//
 // Used by:
 //   - main.jsx — mounted into #root inside the provider stack
 // -----------------------------------------------------------

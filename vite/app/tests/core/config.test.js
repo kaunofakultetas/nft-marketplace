@@ -2,9 +2,9 @@
 //  [*] Tests — the runtime configuration (config.js)
 //
 //  The bundle carries no environment: every deployment value
-//  comes from GET /api/config before React mounts, and
-//  getConfig() hands it out synchronously afterwards. Pinned
-//  down here: getConfig() refuses to answer before the load;
+//  comes from GET /api/config before React mounts, and the
+//  module hands it out synchronously afterwards. Pinned down
+//  here: the accessor refuses to answer before the load;
 //  the load keeps the marketplace address as given, resolves
 //  the relay's relative path against the page's own origin
 //  (wagmi's transport is handed a full URL) and leaves an

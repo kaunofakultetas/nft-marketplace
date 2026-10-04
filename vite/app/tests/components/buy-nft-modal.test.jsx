@@ -3,7 +3,7 @@
 //
 //  The purchase's last step: the question with the price in
 //  ether, Cancel, and OK — which asks MetaMask to send
-//  buyListing(nftAddress, tokenId) to the marketplace paying
+//  buyListing for the token to the marketplace, paying
 //  EXACTLY the listing price (the contract refuses any other
 //  amount), and tells the student how it went in a toast: the
 //  purchase on its way, a rejection in friendly words, or the

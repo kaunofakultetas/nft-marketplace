@@ -82,6 +82,9 @@ const ARCHIVE_STATUSES = {
 // Section
 // -----------------------------------------------------------
 //
+// One white card of the page: its title, an optional grey
+// subtitle, then whatever the card holds.
+//
 // Used by:
 //   - AboutPage (below) — every card
 // -----------------------------------------------------------
@@ -106,6 +109,9 @@ function Section({ title, subtitle, children }) {
 // FactRow
 // -----------------------------------------------------------
 //
+// One label/value line of the instance facts, a hairline
+// between rows.
+//
 // Used by:
 //   - AboutPage (below) — the instance facts
 // -----------------------------------------------------------
@@ -128,6 +134,11 @@ function FactRow({ label, children }) {
 // -----------------------------------------------------------
 // AboutPage (default export)
 // -----------------------------------------------------------
+//
+// The four cards — the instance, how it works, the archive,
+// the contract's interface. Open without a wallet; every
+// live fact shows "…" until the stats are in, and stays so
+// when they fail.
 //
 // Used by:
 //   - App.jsx — route "/about"

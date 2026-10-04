@@ -1,5 +1,5 @@
 // -----------------------------------------------------------
-//  [*] Formatting helpers
+//  [*] Formatting helpers — addresses, amounts, links, dates
 //
 //  Shared display transforms: addresses shown short
 //  everywhere (full 42-char addresses blow up table rows and
@@ -15,6 +15,11 @@
 // -----------------------------------------------------------
 
 import { formatUnits } from 'ethers';
+
+
+// Sepolia's Etherscan — where every address and transaction
+// link of the GUI points
+const ETHERSCAN_URL = 'https://sepolia.etherscan.io';
 
 
 
@@ -109,20 +114,40 @@ export function formatEth(value) {
 
 
 // -----------------------------------------------------------
-// etherscanAddressUrl / etherscanTxUrl
+// etherscanAddressUrl
 // -----------------------------------------------------------
+//
+// An address's page on Sepolia's Etherscan — a contract and
+// a wallet alike, one click from its raw chain data.
 //
 // Used by:
 //   - pages/Home — the contract link under the stats bar
-//   - pages/History — the Tx column
-//   - pages/NftDetail — contract/owner links, history stripes
+//   - pages/About — the marketplace contract fact
+//   - pages/NftDetail — the contract and owner links, the
+//     history stripes' actors
 // -----------------------------------------------------------
-
-const ETHERSCAN_URL = 'https://sepolia.etherscan.io';
 
 export function etherscanAddressUrl(address) {
   return `${ETHERSCAN_URL}/address/${address}`;
 }
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// etherscanTxUrl
+// -----------------------------------------------------------
+//
+// A transaction's page on Sepolia's Etherscan — the on-chain
+// receipt of an event the GUI shows.
+//
+// Used by:
+//   - pages/History — the Tx column
+//   - pages/NftDetail — every history stripe's receipt
+// -----------------------------------------------------------
 
 export function etherscanTxUrl(txHash) {
   return `${ETHERSCAN_URL}/tx/${txHash}`;

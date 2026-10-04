@@ -27,7 +27,8 @@
 //  main.jsx.
 // -----------------------------------------------------------
 
-
+// The loaded configuration — null until loadConfig() has
+// resolved
 let config = null;
 
 

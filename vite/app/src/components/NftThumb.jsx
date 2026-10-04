@@ -21,6 +21,10 @@ import { useNftMetadata } from '@/hooks/useNftMetadata';
 // NftThumb (default export)
 // -----------------------------------------------------------
 //
+// The thumbnail, name and id as one link to the token's
+// page; a wrongly minted token shows a warning sign where
+// its picture would be, its diagnosis on hover.
+//
 // Used by:
 //   - pages/History — the Item column of the activity feed
 // -----------------------------------------------------------

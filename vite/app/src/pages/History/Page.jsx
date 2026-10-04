@@ -3,7 +3,8 @@
 //
 //  One unified stream (GET /api/activity) instead of three
 //  disconnected tables: every event as a row with its type
-//  chip (Listed blue / Sold green / Canceled grey), the NFT
+//  chip (Listed blue / Price update violet / Sold green /
+//  Canceled grey), the NFT
 //  itself (thumbnail + name, linking to the detail page),
 //  price, actor, block time and — technical on purpose —
 //  the block number and the transaction on Etherscan.
@@ -14,7 +15,7 @@
 //
 //  Split into (root component last):
 //
-//    FilterChips — All / Listed / Sold / Canceled
+//    FilterChips — All / Listed / Price update / Sold / Canceled
 //    ActivityRow — one event row
 //    HistoryPage — filters + the feed table (default export)
 // -----------------------------------------------------------
@@ -30,16 +31,17 @@ import ConnectPrompt from '@/components/ConnectPrompt';
 
 
 // One colour per event type — same palette as the detail
-// page's history stripes. 'Updated' is the indexer's replay
-// classification of updateListing's re-emitted ItemListed.
-// A type the feed does not know keeps its own name on a
-// neutral chip.
+// page's history stripes. 'Updated' is the contract's own
+// ItemUpdated event, a reprice.
 const EVENT_STYLES = {
   Listed: 'bg-blue-100 text-blue-800',
   Updated: 'bg-violet-100 text-violet-800',
   Bought: 'bg-green-100 text-green-800',
   Canceled: 'bg-gray-200 text-gray-600',
 };
+
+// A type the feed does not know keeps its own name on a
+// neutral chip
 const UNKNOWN_EVENT_STYLE = 'bg-gray-100 text-gray-500';
 
 // 'Bought' reads as "Sold" in a marketplace feed
@@ -51,6 +53,7 @@ const EVENT_LABELS = {
   Canceled: 'Canceled',
 };
 
+// The filter chips in the order they show, All first
 const FILTERS = ['All', 'Listed', 'Updated', 'Bought', 'Canceled'];
 
 
@@ -62,6 +65,9 @@ const FILTERS = ['All', 'Listed', 'Updated', 'Bought', 'Canceled'];
 // -----------------------------------------------------------
 // FilterChips
 // -----------------------------------------------------------
+//
+// One chip per filter, the active one filled; picking one
+// narrows the feed in the browser — no new request.
 //
 // Used by:
 //   - HistoryPage (below)
@@ -165,6 +171,11 @@ function ActivityRow({ event }) {
 // -----------------------------------------------------------
 // HistoryPage (default export)
 // -----------------------------------------------------------
+//
+// The page: heading and chips, then the feed table — or, in
+// its place, the loading line, the failed read, or what an
+// empty marketplace or an empty filter says. Without a
+// wallet, the connect prompt alone.
 //
 // Used by:
 //   - App.jsx — route "/history"

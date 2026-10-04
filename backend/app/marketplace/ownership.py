@@ -19,9 +19,9 @@
 #  string for the life of the process would only grow.
 #
 #  Deliberately in-memory: the cache resets on restart,
-#  which is fine for a 60-second window. (Like the faucet's
-#  cooldown table, this makes the backend single-process by
-#  design.)
+#  which is fine for a 60-second window. It also makes the
+#  backend single-process by design — a second worker would
+#  keep a cache of its own.
 #
 #  Used by:
 #    - app/marketplace/routes.py — GET /api/my-nfts/<wallet>
@@ -43,7 +43,6 @@ REFRESH_SECONDS = 60
 # their holdings keep the stale fallback through an Etherscan
 # outage, since every ask restarts the clock.
 FORGET_SECONDS = 5 * 60
-
 
 
 
@@ -99,16 +98,16 @@ class WalletHoldings:
     # get_nfts
     ############################################################
     #
-    # The wallet's current holdings as [{nftAddress, tokenId}]
-    # (addresses lowercase). Serves the cache while it is
-    # younger than REFRESH_SECONDS; on a failed refresh a
-    # STALE cache still wins over an error — only a wallet
-    # never seen before (or forgotten) propagates the
-    # exception. Every ask restarts the wallet's forget clock
-    # and lets the cache forget the wallets nobody asked for.
-    # Two parallel first requests for one wallet may both
-    # fetch; the second write wins and both return correct
-    # data.
+    # The wallet's current holdings: each token by its
+    # collection address (lowercase) and its id. Serves the
+    # cache while it is younger than REFRESH_SECONDS; on a
+    # failed refresh a STALE cache still wins over an error —
+    # only a wallet never seen before (or forgotten)
+    # propagates the exception. Every ask restarts the
+    # wallet's forget clock and lets the cache forget the
+    # wallets nobody asked for. Two parallel first requests
+    # for one wallet may both fetch; the second write wins and
+    # both return correct data.
     #
     # Used by:
     #   - routes.py — GET /api/my-nfts/<wallet>

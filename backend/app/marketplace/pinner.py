@@ -33,7 +33,7 @@
 #  ./_DATA/ipfs volume — back that directory up.
 #
 #  Used by:
-#    - main.py — one instance, started at startup (STEP 3)
+#    - main.py — one instance, started at startup (STEP 4)
 ############################################################
 
 
@@ -68,15 +68,15 @@ RESCUE_GATEWAYS = (
 
 
 
-
 ############################################################
 # _decode_abi_string
 ############################################################
 #
-# An eth_call result for a string-returning function →
-# Python str (ABI head/tail encoding: offset word, length
-# word, UTF-8 bytes). Empty/short results (a contract
-# without tokenURI) come back as ''.
+# An eth_call result for a string-returning function as
+# Python text (ABI head/tail encoding: offset word, length
+# word, UTF-8 bytes). A result too short to hold a string —
+# a contract without tokenURI answers that way — comes back
+# empty.
 #
 # Used by:
 #   - Pinner._resolve_token_uri (below)
@@ -97,21 +97,20 @@ def _decode_abi_string(hex_result):
 
 
 
-
 ############################################################
 # _extract_ipfs_path
 ############################################################
 #
-# Any known IPFS URI shape → the path under /ipfs/ (root CID
-# plus an optional subpath, query strings dropped), or None
-# for URIs that are not IPFS-addressed at all (arweave.net,
-# plain https, data:). Three shapes exist in the wild — all
-# three occur in THIS marketplace's real tokens:
-#
-#   ipfs://<cid>/<path>
-#   https://<host>/ipfs/<cid>/<path>     (path gateways)
-#   https://<cid>.ipfs.<host>/<path>     (subdomain gateways:
-#                                         dweb.link & friends)
+# Any known IPFS URI shape reduced to its path under /ipfs/
+# (the root CID plus an optional subpath, query strings
+# dropped), or None for URIs that are not IPFS-addressed at
+# all (Arweave, plain https, data URIs). Three shapes exist
+# in the wild — all three occur in THIS marketplace's real
+# tokens: the ipfs:// scheme with the CID right after it
+# (the legacy form with an extra ipfs/ segment included),
+# path gateways on any host carrying it after /ipfs/, and
+# subdomain gateways (dweb.link and the like) carrying it in
+# the host name.
 #
 # The ROOT CID is what gets pinned — a recursive pin covers
 # every subpath.
@@ -147,7 +146,6 @@ def _extract_ipfs_path(uri):
 
 
 
-
 ############################################################
 # Pinner
 ############################################################
@@ -161,7 +159,8 @@ def _extract_ipfs_path(uri):
 #   state — _record
 #
 # Used by:
-#   - main.py — Pinner(etherscan).start()
+#   - main.py — one instance over the client the daemons
+#     share, started at startup (STEP 4)
 ############################################################
 
 class Pinner:
@@ -180,7 +179,7 @@ class Pinner:
     # IPFS_API_URL.
     #
     # Used by:
-    #   - main.py — startup STEP 3
+    #   - main.py — startup STEP 4
     ############################################################
 
     def __init__(self, etherscan):
@@ -199,7 +198,7 @@ class Pinner:
     # with Flask, nothing to join on shutdown.
     #
     # Used by:
-    #   - main.py — startup STEP 3
+    #   - main.py — startup STEP 4
     ############################################################
 
     def start(self):
@@ -245,7 +244,8 @@ class Pinner:
     # Every distinct token the indexer has ever seen, checked
     # against the Pinned_Files state; only tokens with work
     # left (no row yet, or a 'pending' row) cost anything —
-    # a fully-archived marketplace is one SQL query per cycle.
+    # a fully-archived marketplace costs a cycle two SQL reads
+    # and nothing more.
     #
     # Never-attempted tokens go FIRST: a failed pin blocks for
     # its full 45s timeout, and a handful of long-dead CIDs

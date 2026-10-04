@@ -3,7 +3,8 @@
 #      Etherscan
 #
 #  Every chain read the backend makes goes through this tool
-#  class: the indexer's log scans and the wallet-holdings
+#  class: the indexer's log scans, the pinner's tokenURI
+#  calls, the deployment lookup and the wallet-holdings
 #  lookups. One class owns the request plumbing (base URL,
 #  chain id, API key, timeouts, error normalization, the
 #  free-tier politeness pauses) so no other module ever
@@ -16,10 +17,12 @@
 #  this project's credits under graph-node.
 #
 #  Used by:
-#    - app/marketplace/indexer.py — get_logs, block_number
+#    - app/marketplace/indexer.py — get_logs, block_number,
+#      contract_creation, hex_int
+#    - app/marketplace/pinner.py — eth_call
 #    - app/marketplace/ownership.py — token_nft_transfers
-#    - app/marketplace/routes.py / main.py — construct the
-#      shared instances
+#    - app/marketplace/routes.py — contract_creation
+#    - routes.py and main.py construct the instances
 ############################################################
 
 
@@ -29,7 +32,6 @@ import requests
 
 from app.marketplace.failures import describe_request_failure
 from main import ETHERSCAN_API_URL, SEPOLIA_CHAIN_ID, ETHERSCAN_API_KEY
-
 
 
 
@@ -61,22 +63,24 @@ def hex_int(value):
 
 
 
-
 ############################################################
 # EtherscanClient
 ############################################################
 #
-# One stateless instance per consumer — it holds only
-# configuration, so instances are cheap and thread-safe.
-# Methods in groups:
+# Stateless — an instance holds only configuration, so it is
+# cheap and safe to share between threads. Methods in
+# groups:
 #
 #   plumbing — _get
-#   chain    — block_number, get_logs
+#   chain    — block_number, contract_creation, get_logs,
+#              eth_call
 #   wallet   — token_nft_transfers
 #
 # Used by:
-#   - main.py — the indexer's instance (startup STEP 3)
-#   - routes.py — the wallet-holdings instance
+#   - main.py — the instance the daemons share (startup
+#     STEP 4)
+#   - routes.py — the routes' own instance: the deployment
+#     facts and the wallet holdings
 ############################################################
 
 class EtherscanClient:

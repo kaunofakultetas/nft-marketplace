@@ -69,6 +69,8 @@ export const hexChain = (id) => `0x${Number(id).toString(16)}`;
 // The popups MetaMask refuses to open twice for one site
 const PERMISSION_PROMPTS = new Set(['eth_requestAccounts', 'wallet_requestPermissions']);
 
+// The icon an EIP-6963 announcement must carry — any image
+// will do
 const WALLET_ICON = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E';
 
 let walletSerial = 0;

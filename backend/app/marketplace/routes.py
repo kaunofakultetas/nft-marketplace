@@ -1,11 +1,11 @@
 ############################################################
 #  [*] Marketplace API — what the Vite GUI reads
 #
-#  Every read the GUI needs. Three routes serve straight
-#  from the indexer's SQLite tables; the fourth serves
-#  wallet holdings through the WalletHoldings cache
-#  (ownership.py). The handlers stay thin — the classes own
-#  the logic.
+#  Every read the GUI needs. Four routes serve straight from
+#  the indexer's SQLite tables, one serves wallet holdings
+#  through the WalletHoldings cache (ownership.py), and one
+#  relays the browser's chain reads to the RPC provider. The
+#  handlers stay thin — the classes own the logic.
 #
 #    GET  /api/stats                           — marketplace totals + indexer position
 #    GET  /api/listings                        — active listings
@@ -18,7 +18,7 @@
 #  lowercase and the routes lowercase their path params.
 #
 #  Used by:
-#    - main.py — blueprint registration (STEP 2)
+#    - main.py — blueprint registration (STEP 3)
 #    - vite/app/src/pages/* — via utils/api.js
 #    - the browser's wagmi transport — /api/rpc
 ############################################################
@@ -43,7 +43,6 @@ wallet_holdings = WalletHoldings(etherscan)
 # The deployment facts never change — fetched from Etherscan
 # once per process, lazily, so a hiccup only delays them
 _deployment = None
-
 
 
 
@@ -116,7 +115,6 @@ def get_stats():
 
 
 
-
 ############################################################
 # get_listings
 ############################################################
@@ -130,6 +128,7 @@ def get_stats():
 # Used by:
 #   - pages/Home — the "NFTs For Sale" grid
 #   - pages/MyNfts — price/seller badge per owned NFT
+#   - pages/SellNft — the listed NFTs left out of the picker
 ############################################################
 
 @bp_marketplace.route('/api/listings', methods=['GET'])
@@ -150,7 +149,6 @@ def get_listings():
         }
         for row in rows
     ]})
-
 
 
 
@@ -207,7 +205,6 @@ def get_activity():
         }
         for row in rows
     ]})
-
 
 
 
@@ -284,7 +281,6 @@ def get_nft(nft_address, token_id):
 
 
 
-
 ############################################################
 # get_my_nfts
 ############################################################
@@ -301,6 +297,7 @@ def get_nft(nft_address, token_id):
 #
 # Used by:
 #   - pages/MyNfts — the wallet's NFT grid
+#   - pages/SellNft — the picker of the wallet's NFTs
 ############################################################
 
 @bp_marketplace.route('/api/my-nfts/<wallet_address>', methods=['GET'])
@@ -309,7 +306,6 @@ def get_my_nfts(wallet_address):
         return jsonify({'nfts': wallet_holdings.get_nfts(wallet_address)})
     except Exception as error:
         return jsonify({'error': f'Etherscan request failed: {error}'}), 502
-
 
 
 

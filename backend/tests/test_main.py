@@ -13,7 +13,7 @@
 #    config   — GET /api/config is exactly the four public
 #               values: the relay's PATH, never the RPC URL
 #               with its key, and no Etherscan key either
-#    boot     — `python main.py` (run as __main__ with the
+#    boot     — main.py run as a script (as __main__, the
 #               daemons and the dev server patched out): the
 #               schema first, ProxyFix, every route, the
 #               contract check BEFORE the daemons start, the
@@ -215,12 +215,12 @@ class ConfigRouteTests(unittest.TestCase):
 # BootTests
 ############################################################
 #
-# main.py run as `python main.py` does, its every outside
-# effect patched: the schema goes into a throwaway file, the
-# daemons' start() and the dev server only record that they
-# were called, and the contract check runs for real against
-# the throwaway file. `order` is the sequence the boot went
-# through.
+# main.py run the way the container starts it, its every
+# outside effect patched: the schema goes into a throwaway
+# file, the daemons' start() and the dev server only record
+# that they were called, and the contract check runs for
+# real against the throwaway file. `order` is the sequence
+# the boot went through.
 ############################################################
 
 class BootTests(unittest.TestCase):

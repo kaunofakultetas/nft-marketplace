@@ -2,17 +2,19 @@
 #  [*] Database initialization
 #
 #  The whole schema, idempotent (CREATE IF NOT EXISTS —
-#  safe on every boot). Three tables:
+#  safe on every boot). Four tables:
 #
 #    Marketplace_Events         — every contract event, one
-#                                 row per log, append-only
+#                                 row per log, kept in step
+#                                 with the chain
 #    Marketplace_ActiveListings — the CURRENT state derived
-#                                 from the event replay
+#                                 from the events
 #    Pinned_Files               — the pinner's archive
 #                                 inventory (IPFS CIDs per
 #                                 token)
 #    Indexer_State              — key/value scratch (the
-#                                 last scanned block)
+#                                 scan position and time,
+#                                 the contract it is for)
 #
 #  Addresses are stored LOWERCASE everywhere and queries
 #  compare lowercase directly — no LOWER() on columns, which
@@ -28,20 +30,37 @@
 from .db import get_db_connection
 
 
+
+
+
+
+
+
+############################################################
+# init_db
+############################################################
+#
+# Creates every table and index that does not exist yet —
+# an existing database keeps its tables and its rows;
+# nothing here migrates or drops.
+#
+# Used by:
+#   - main.py — once at startup (STEP 1)
+############################################################
+
 def init_db():
     with get_db_connection() as conn:
 
 
         ######################## Marketplace event log ########################
-        # EventType is 'Listed' / 'Updated' / 'Bought' / 'Canceled' —
-        # 'Updated' is the REPLAY's classification of an ItemListed event
-        # that hit an already-active listing (updateListing re-emits
-        # ItemListed; on-chain the two are identical). Seller is NULL on
-        # Bought rows, Buyer is NULL on Listed/Canceled rows, Price is NULL
-        # on Canceled rows — mirroring what each contract event carries.
+        # EventType is 'Listed' / 'Updated' / 'Bought' / 'Canceled' — one
+        # per contract event, a reprice being its own ItemUpdated event.
+        # Buyer is NULL on everything but Bought rows, Price is NULL on
+        # Canceled rows — mirroring what each contract event carries.
         # Timestamp is the block's unix time (Etherscan sends it with every
-        # log). UNIQUE(TxHash, LogIndex) makes re-scanning a block range
-        # idempotent: duplicates are ignored, never doubled.
+        # log). UNIQUE(TxHash, LogIndex) keeps one row per log whatever a
+        # scan reads twice; the indexer rewrites its re-scanned window in
+        # chain order, so the Ids follow the chain.
         conn.execute('''
             CREATE TABLE IF NOT EXISTS [Marketplace_Events] (
                 [Id] INTEGER PRIMARY KEY,
@@ -70,8 +89,9 @@ def init_db():
 
 
         ######################## Current listings state ########################
-        # Rewritten by the indexer as events replay: Listed upserts a row,
-        # Bought/Canceled deletes it. What is in this table IS the
+        # Re-derived by the indexer for every token a scan touches, from the
+        # token's latest event: a listing or a reprice puts its row in, a
+        # sale or a cancellation takes it out. What is in this table IS the
         # storefront.
         conn.execute('''
             CREATE TABLE IF NOT EXISTS [Marketplace_ActiveListings] (
@@ -90,10 +110,12 @@ def init_db():
         ######################## Pinned NFT files #############################
         # The pinner's archive inventory: one row per (token, kind) where
         # Kind is 'metadata' or 'image'. Status walks pending → pinned /
-        # skipped (URI is not IPFS-addressed, nothing to pin) /
-        # unreachable (content gone from the network before we could
-        # replicate it — the loss is recorded, not silent). Uri is the raw
-        # URI as found on-chain / in metadata; Cid the extracted IPFS root.
+        # skipped (URI is not IPFS-addressed, nothing to pin) / invalid
+        # (wrongly minted metadata — no image to look for) / unreachable
+        # (content gone from the network before we could replicate it —
+        # the loss is recorded, not silent). Uri is the raw URI as found
+        # on-chain / in metadata; Cid the extracted IPFS root — both as
+        # far as known, a lost file's row included.
         conn.execute('''
             CREATE TABLE IF NOT EXISTS [Pinned_Files] (
                 [Id] INTEGER PRIMARY KEY,
@@ -112,8 +134,10 @@ def init_db():
 
 
         ######################## Indexer scratch state ########################
-        # One row: Key='LastScannedBlock'. The indexer resumes from here
-        # after a restart instead of re-scanning the whole chain.
+        # Key/value rows: LastScannedBlock — the indexer resumes from here
+        # after a restart instead of re-scanning the whole chain;
+        # LastScannedAt — when, for the GUI; ContractAddress — the contract
+        # the derived tables were built for.
         conn.execute('''
             CREATE TABLE IF NOT EXISTS [Indexer_State] (
                 [Key] TEXT NOT NULL,

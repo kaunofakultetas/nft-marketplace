@@ -3,9 +3,9 @@
 //
 //  Every data page renders this instead of its content while
 //  no wallet is connected: one centered white card with the
-//  faculty logo, the page-specific message and the RainbowKit
-//  Connect button — so the user can act right where they are
-//  told to. One component = one voice across the app.
+//  faculty logo, the page-specific message and the wallet
+//  button (ConnectButton) — so the user can act right where
+//  they are told to. One component, one voice across the app.
 // -----------------------------------------------------------
 
 import ConnectButton from '@/components/ConnectButton';
@@ -19,6 +19,8 @@ import ConnectButton from '@/components/ConnectButton';
 // -----------------------------------------------------------
 // ConnectPrompt (default export)
 // -----------------------------------------------------------
+//
+// The card, with the message its page passes in.
 //
 // Used by:
 //   - pages/Home, pages/MyNfts, pages/History, pages/SellNft

@@ -3,9 +3,9 @@
 //
 //  Two actions on one modal, for the student's own listing:
 //  a new price — refused in the browser, with an alert and no
-//  wallet popup, unless it is above zero; then
-//  updateListing(nftAddress, tokenId, price in wei) through
-//  MetaMask — or cancelListing. Each tells the student how it
+//  wallet popup, unless it is above zero; then updateListing
+//  for the token, with the price in wei, through MetaMask —
+//  or cancelListing. Each tells the student how it
 //  went in a toast and closes the modal on success; a
 //  declined popup keeps it open with "Transaction rejected in
 //  the wallet."; a price ether cannot hold is refused in

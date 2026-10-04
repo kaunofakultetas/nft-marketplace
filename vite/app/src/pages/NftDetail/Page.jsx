@@ -38,14 +38,19 @@
 //
 //  Split into (root component last):
 //
-//    ImagePanel      — image or placeholder square
-//    ProblemPanel    — the what-is-wrong + how-to-fix card
-//    InfoPanel       — name, description, facts table
-//    ActionsPanel    — the four owner/visitor variants
-//    HistoryPanel    — sales / listings / cancellations
-//    ArchivePanel    — the IPFS pin status of the files
-//    AttributesPanel — metadata attributes grid
-//    NftDetailPage   — data loading + layout (default export)
+//    STRIPE            — the timeline's look per event type
+//    PIN_STATUS_STYLES — the archive's chip per pin status
+//    ImagePanel        — image or placeholder square
+//    ProblemPanel      — the what-is-wrong + how-to-fix card
+//    InfoPanel         — name, description, facts table
+//    ActionsPanel      — the four owner/visitor variants
+//    stripeTx          — a stripe's transaction link
+//    unknownStripe     — the look of an event type not known
+//    HistoryPanel      — sales / listings / cancellations
+//    ArchivePanel      — the IPFS pin status of the files
+//    attributeText     — a trait or value as text
+//    AttributesPanel   — metadata attributes grid
+//    NftDetailPage     — data loading + layout (default export)
 // -----------------------------------------------------------
 
 import { useState, useEffect } from 'react';
@@ -60,6 +65,28 @@ import { useNftMetadata } from '@/hooks/useNftMetadata';
 import { truncateAddress, etherscanAddressUrl, etherscanTxUrl, formatDateTime, formatEth, parseWei } from '@/utils/format';
 import UpdateListingModal from '@/components/UpdateListingModal';
 import BuyNftModal from '@/components/BuyNftModal';
+
+
+// Timeline look per event type: the node colour on the rail,
+// the chip (same palette as the activity feed) and the verb.
+// The actor is the seller on everything except a sale, where
+// it is the buyer.
+const STRIPE = {
+  Listed: { dot: 'bg-blue-500', chip: 'bg-blue-100 text-blue-800', label: 'Listed', joiner: 'by' },
+  Updated: { dot: 'bg-violet-500', chip: 'bg-violet-100 text-violet-800', label: 'Price updated', joiner: 'by' },
+  Bought: { dot: 'bg-green-500', chip: 'bg-green-100 text-green-800', label: 'Sold', joiner: 'to' },
+  Canceled: { dot: 'bg-gray-400', chip: 'bg-gray-200 text-gray-600', label: 'Cancelled', joiner: 'by' },
+};
+
+// One archive chip per pin status — colour says it all at a
+// glance ('invalid' = the metadata itself is wrongly minted)
+const PIN_STATUS_STYLES = {
+  pinned: 'bg-green-100 text-green-800',
+  pending: 'bg-yellow-100 text-yellow-800',
+  skipped: 'bg-gray-100 text-gray-600',
+  invalid: 'bg-orange-100 text-orange-800',
+  unreachable: 'bg-red-100 text-red-800',
+};
 
 
 
@@ -376,6 +403,59 @@ function ActionsPanel({ isOwner, isListed, listingUnknown, currentPrice, nftAddr
 
 
 // -----------------------------------------------------------
+// stripeTx
+// -----------------------------------------------------------
+//
+// The transaction link every stripe ends with — the event's
+// on-chain receipt, opened on Etherscan in a new tab.
+//
+// Used by:
+//   - HistoryPanel (below)
+// -----------------------------------------------------------
+
+function stripeTx(txHash) {
+  return (
+    <a
+      href={etherscanTxUrl(txHash)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs font-mono text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] underline"
+      title={txHash}
+    >
+      tx ↗
+    </a>
+  );
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// unknownStripe
+// -----------------------------------------------------------
+//
+// The look of an event type the timeline does not know —
+// neutral, labelled with the type itself, never passed off
+// as one it knows.
+//
+// Used by:
+//   - HistoryPanel (below)
+// -----------------------------------------------------------
+
+function unknownStripe(type) {
+  return { dot: 'bg-gray-300', chip: 'bg-gray-100 text-gray-500', label: String(type), joiner: 'by' };
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
 // HistoryPanel
 // -----------------------------------------------------------
 //
@@ -393,34 +473,6 @@ function ActionsPanel({ isOwner, isListed, listingUnknown, currentPrice, nftAddr
 // Used by:
 //   - NftDetailPage (below) — right column, third card
 // -----------------------------------------------------------
-
-// Every stripe ends with its on-chain receipt
-const stripeTx = (txHash) => (
-  <a
-    href={etherscanTxUrl(txHash)}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="text-xs font-mono text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] underline"
-    title={txHash}
-  >
-    tx ↗
-  </a>
-);
-
-// Timeline look per event type: the node colour on the rail,
-// the chip (same palette as the activity feed) and the verb.
-// The actor is the seller on everything except a sale, where
-// it is the buyer.
-const STRIPE = {
-  Listed: { dot: 'bg-blue-500', chip: 'bg-blue-100 text-blue-800', label: 'Listed', joiner: 'by' },
-  Updated: { dot: 'bg-violet-500', chip: 'bg-violet-100 text-violet-800', label: 'Price updated', joiner: 'by' },
-  Bought: { dot: 'bg-green-500', chip: 'bg-green-100 text-green-800', label: 'Sold', joiner: 'to' },
-  Canceled: { dot: 'bg-gray-400', chip: 'bg-gray-200 text-gray-600', label: 'Cancelled', joiner: 'by' },
-};
-
-// The look of a type the timeline does not know — neutral,
-// labelled with the type itself
-const unknownStripe = (type) => ({ dot: 'bg-gray-300', chip: 'bg-gray-100 text-gray-500', label: String(type), joiner: 'by' });
 
 function HistoryPanel({ events, loading, error }) {
 
@@ -512,23 +564,16 @@ function HistoryPanel({ events, loading, error }) {
 //
 // The pinner's per-file verdict for this token — pinned on
 // the course IPFS node (permanent), pending (still trying),
-// skipped (not IPFS-addressed) or unreachable (gone from
-// the network before we could replicate it). Honest teaching
-// data: this is what "decentralized storage" actually does.
+// skipped (not IPFS-addressed), invalid (the metadata itself
+// is wrongly minted) or unreachable (gone from the network
+// before we could replicate it) — each file's CID beside it
+// as far as it is known. Honest teaching data: this is what
+// "decentralized storage" actually does. No card at all for
+// a token the pinner never saw.
 //
 // Used by:
 //   - NftDetailPage (below) — right column, fourth card
 // -----------------------------------------------------------
-
-// One chip per status — colour says it all at a glance
-// ('invalid' = the metadata itself is wrongly minted)
-const PIN_STATUS_STYLES = {
-  pinned: 'bg-green-100 text-green-800',
-  pending: 'bg-yellow-100 text-yellow-800',
-  skipped: 'bg-gray-100 text-gray-600',
-  invalid: 'bg-orange-100 text-orange-800',
-  unreachable: 'bg-red-100 text-red-800',
-};
 
 function ArchivePanel({ archive }) {
 
@@ -569,6 +614,29 @@ function ArchivePanel({ archive }) {
 
 
 // -----------------------------------------------------------
+// attributeText
+// -----------------------------------------------------------
+//
+// A trait or a value as text: numbers and booleans read as
+// themselves, anything else that is no text — an object, a
+// list — as nothing, so a malformed attribute can never
+// reach React as something it cannot render.
+//
+// Used by:
+//   - AttributesPanel (below)
+// -----------------------------------------------------------
+
+function attributeText(value) {
+  return ['string', 'number', 'boolean'].includes(typeof value) ? String(value) : '';
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
 // AttributesPanel
 // -----------------------------------------------------------
 //
@@ -581,10 +649,6 @@ function ArchivePanel({ archive }) {
 // Used by:
 //   - NftDetailPage (below) — right column, last card
 // -----------------------------------------------------------
-
-// A trait or value as text — numbers and booleans read as
-// themselves, anything else that is no text as nothing
-const attributeText = (value) => (['string', 'number', 'boolean'].includes(typeof value) ? String(value) : '');
 
 function AttributesPanel({ attributes }) {
   return (

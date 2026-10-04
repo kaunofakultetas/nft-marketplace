@@ -26,8 +26,9 @@ import { truncateAddress } from '@/utils/format';
 
 // The shared pill shape; each state appends its colours
 const PILL = 'px-4 py-2 rounded-full text-sm font-semibold transition-colors ';
-const PILL_LIGHT = PILL + 'bg-white text-[var(--color-primary)] border border-gray-300 hover:bg-gray-100';
 
+// The white pill of every state but the wrong network
+const PILL_LIGHT = PILL + 'bg-white text-[var(--color-primary)] border border-gray-300 hover:bg-gray-100';
 
 
 
@@ -38,6 +39,9 @@ const PILL_LIGHT = PILL + 'bg-white text-[var(--color-primary)] border border-gr
 // -----------------------------------------------------------
 // ConnectButton (default export)
 // -----------------------------------------------------------
+//
+// The pill itself: one early return per state, checked in
+// the header's order — the first that applies is what shows.
 //
 // Used by:
 //   - components/Header — the top bar

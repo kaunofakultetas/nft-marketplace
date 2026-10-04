@@ -3,15 +3,15 @@
 //
 //  The marketplace card, fluid inside the pages' auto-fill
 //  grid — IMAGE FIRST (square, zooming slightly on hover
-//  while the card lifts), then name,
-//  price (the visual anchor, brand burgundy), description
-//  and the token/owner meta line. Metadata resolution lives
-//  in useNftMetadata (shared with the activity feed's
-//  thumbnails); while it loads the card is a grey pulse
-//  skeleton of the same size, and fetch failures degrade to
-//  placeholder values instead of a blank card. Clicking
-//  anywhere navigates to /nft/:nftAddress/:tokenId — buying
-//  and listing actions live THERE, not on the card.
+//  while the card lifts), then name, price (the visual
+//  anchor, brand burgundy), description and the token/owner
+//  meta line. Metadata resolution lives in useNftMetadata
+//  (shared with the activity feed's thumbnails); while it
+//  loads the card is a grey pulse skeleton of the same size,
+//  and a token that cannot be shown wears its diagnosis
+//  instead of a blank card. Clicking anywhere navigates to
+//  /nft/:nftAddress/:tokenId — buying and listing actions
+//  live THERE, not on the card.
 // -----------------------------------------------------------
 
 import { useNavigate } from 'react-router-dom';

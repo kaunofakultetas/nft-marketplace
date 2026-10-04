@@ -14,6 +14,9 @@
 //
 //  Split into (root component last):
 //
+//    SORTERS  — the grid's sort orders
+//    inEth    — an amount the way a stat tile shows it
+//    byPrice  — the price comparator of the two price orders
 //    StatTile — one white stat card
 //    StatsBar — the four tiles + contract/indexer line
 //    HomePage — stats + sort + grid (default export)
@@ -96,6 +99,9 @@ function byPrice(direction) {
 // StatTile
 // -----------------------------------------------------------
 //
+// One figure of the bar: its label over its value, on a
+// white card that shares the row's width.
+//
 // Used by:
 //   - StatsBar (below)
 // -----------------------------------------------------------
@@ -176,6 +182,11 @@ function StatsBar() {
 // -----------------------------------------------------------
 // HomePage (default export)
 // -----------------------------------------------------------
+//
+// The page: the stats bar, the heading with the sort
+// control, then the grid — or, in its place, the loading
+// line, the failed read or the empty marketplace's nudge.
+// Without a wallet, the connect prompt alone.
 //
 // Used by:
 //   - App.jsx — route "/"

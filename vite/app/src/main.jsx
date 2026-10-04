@@ -3,9 +3,9 @@
 //
 //  Startup is TWO steps: await GET /api/config (config.js),
 //  THEN build the provider stack from those values and render
-//  <App /> into #root. Nothing renders before the config is
-//  in — every module below the root may call getConfig()
-//  synchronously.
+//  the App component into #root. Nothing renders before the
+//  config is in — every module below the root may read it
+//  through getConfig() synchronously.
 //
 //  Provider stack — deliberately SELF-RELIANT, no wallet
 //  cloud services, no project ids:
@@ -33,6 +33,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { loadConfig } from '@/config';
 import App from '@/App';
 import './index.css';
+
+
+
+
+
 
 
 // -----------------------------------------------------------
@@ -65,13 +70,18 @@ function ConfigError({ message }) {
 }
 
 
+
+
+
+
+
 // -----------------------------------------------------------
 // bootstrap
 // -----------------------------------------------------------
 //
 // Awaits the runtime config, then builds the wagmi config
 // FROM it — that is why it cannot be a module-level
-// constant — and renders the provider stack around <App />.
+// constant — and renders the provider stack around the app.
 //
 // Used by:
 //   - the module's last line — runs immediately on load

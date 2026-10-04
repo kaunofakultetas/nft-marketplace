@@ -109,12 +109,135 @@ _ANCHOR_BLOCK = 9712000
 _ANCHOR_TIME = 1790060000
 
 
+
+
+
+
+
+
+############################################################
+# block_time
+############################################################
+#
+# The unix time of a block in this world — twelve seconds a
+# block from the anchor above, so every date the story
+# carries is one the frontend fixtures carry too.
+#
+# Used by:
+#   - make_log, DbTestCase, FakeEtherscan, nft_transfer
+#     (in this file) — the times they fill in
+#   - test_indexer.py, test_etherscan.py, test_api_routes.py
+############################################################
+
 def block_time(block):
     return _ANCHOR_TIME + (block - _ANCHOR_BLOCK) * 12
 
 
+
+
+
+
+
+
+############################################################
+# wei
+############################################################
+#
+# An ether amount, written as text, in wei — through
+# Decimal, so no amount drifts the way a float would.
+#
+# Used by:
+#   - STORY_LOGS (below) — the story's prices
+#   - test_indexer.py, test_api_routes.py
+############################################################
+
 def wei(ether):
     return int(Decimal(ether) * 10 ** 18)
+
+
+
+
+
+
+
+
+# Keccak-f[1600]'s 24 round constants — one per round, the
+# last step of each (keccak256, below)
+_ROUND_CONSTANTS = (
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+)
+
+# rho offsets, indexed [x][y]
+_ROTATIONS = (
+    (0, 36, 3, 41, 18),
+    (1, 44, 10, 45, 2),
+    (62, 6, 43, 15, 61),
+    (28, 55, 25, 21, 56),
+    (27, 20, 39, 8, 14),
+)
+
+# Every lane is a 64-bit word
+_MASK = (1 << 64) - 1
+
+
+
+
+
+
+
+
+############################################################
+# _rotl
+############################################################
+#
+# A 64-bit lane rotated left by the given number of bits; a
+# zero shift leaves it as it is.
+#
+# Used by:
+#   - _keccak_f (below) — the theta and rho steps
+############################################################
+
+def _rotl(value, shift):
+    return ((value << shift) | (value >> (64 - shift))) & _MASK if shift else value
+
+
+
+
+
+
+
+
+############################################################
+# _keccak_f
+############################################################
+#
+# Keccak-f[1600], the permutation itself, over the state's
+# 25 lanes: per round theta, rho and pi, chi and iota, for
+# the 24 rounds of the round constants above.
+#
+# Used by:
+#   - keccak256 (below) — once per absorbed block
+############################################################
+
+def _keccak_f(lanes):
+    for constant in _ROUND_CONSTANTS:
+        columns = [lanes[x] ^ lanes[x + 5] ^ lanes[x + 10] ^ lanes[x + 15] ^ lanes[x + 20] for x in range(5)]
+        lanes = [lanes[i] ^ columns[(i % 5 - 1) % 5] ^ _rotl(columns[(i % 5 + 1) % 5], 1) for i in range(25)]
+
+        moved = [0] * 25
+        for x in range(5):
+            for y in range(5):
+                moved[y + 5 * ((2 * x + 3 * y) % 5)] = _rotl(lanes[x + 5 * y], _ROTATIONS[x][y])
+
+        lanes = [moved[x + 5 * y] ^ ((~moved[(x + 1) % 5 + 5 * y] & _MASK) & moved[(x + 2) % 5 + 5 * y])
+                 for y in range(5) for x in range(5)]
+        lanes[0] ^= constant
+    return lanes
 
 
 
@@ -136,48 +259,9 @@ def wei(ether):
 #
 # Used by:
 #   - test_main.py — EVENT_TOPICS against their signatures
+#   - test_indexer.py — the topic of an event the marketplace
+#     does not emit
 ############################################################
-
-_ROUND_CONSTANTS = (
-    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
-    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
-    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
-    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
-    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
-    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
-)
-
-# rho offsets, indexed [x][y]
-_ROTATIONS = (
-    (0, 36, 3, 41, 18),
-    (1, 44, 10, 45, 2),
-    (62, 6, 43, 15, 61),
-    (28, 55, 25, 21, 56),
-    (27, 20, 39, 8, 14),
-)
-
-_MASK = (1 << 64) - 1
-
-
-def _rotl(value, shift):
-    return ((value << shift) | (value >> (64 - shift))) & _MASK if shift else value
-
-
-def _keccak_f(lanes):
-    for constant in _ROUND_CONSTANTS:
-        columns = [lanes[x] ^ lanes[x + 5] ^ lanes[x + 10] ^ lanes[x + 15] ^ lanes[x + 20] for x in range(5)]
-        lanes = [lanes[i] ^ columns[(i % 5 - 1) % 5] ^ _rotl(columns[(i % 5 + 1) % 5], 1) for i in range(25)]
-
-        moved = [0] * 25
-        for x in range(5):
-            for y in range(5):
-                moved[y + 5 * ((2 * x + 3 * y) % 5)] = _rotl(lanes[x + 5 * y], _ROTATIONS[x][y])
-
-        lanes = [moved[x + 5 * y] ^ ((~moved[(x + 1) % 5 + 5 * y] & _MASK) & moved[(x + 2) % 5 + 5 * y])
-                 for y in range(5) for x in range(5)]
-        lanes[0] ^= constant
-    return lanes
-
 
 def keccak256(data):
     rate = 136
@@ -203,7 +287,49 @@ def keccak256(data):
 
 
 ############################################################
-# make_log / STORY_LOGS
+# _topic
+############################################################
+#
+# An address the way a log topic carries it: lowercase,
+# left-padded with zeros to 32 bytes.
+#
+# Used by:
+#   - make_log (below) — the actor and the collection
+############################################################
+
+def _topic(address):
+    return '0x' + address.lower()[2:].rjust(64, '0')
+
+
+
+
+
+
+
+
+############################################################
+# _word
+############################################################
+#
+# A number as one 32-byte ABI word in hex — the unit a log's
+# topics and data, and an eth_call result, are made of.
+#
+# Used by:
+#   - make_log, abi_string (below)
+############################################################
+
+def _word(number):
+    return format(number, '064x')
+
+
+
+
+
+
+
+
+############################################################
+# make_log
 ############################################################
 #
 # One marketplace event as Etherscan's getLogs hands it over:
@@ -214,24 +340,10 @@ def keccak256(data):
 # cancellation), and the hex fields — with a zero logIndex
 # written as Etherscan writes it, a bare '0x'.
 #
-# STORY_LOGS is the marketplace story the frontend suite's
-# fixtures tell, oldest first: a classmate lists PUG #0 and
-# lowers its price; the student lists PUG #1 and PUG #2 and
-# sells PUG #2; the classmate lists two tokens of the ART
-# collection, cancels one and lists a third.
-#
 # Used by:
-#   - test_indexer.py, test_api_routes.py — the replay and
-#     the answers built from it
+#   - STORY_LOGS (below)
+#   - test_indexer.py, test_etherscan.py — logs of their own
 ############################################################
-
-def _topic(address):
-    return '0x' + address.lower()[2:].rjust(64, '0')
-
-
-def _word(number):
-    return format(number, '064x')
-
 
 def make_log(event, nft, token_id, actor, block, log_index=0, price=None, seller=None, tx_hash=None, timestamp=None):
     data = ''
@@ -254,6 +366,27 @@ def make_log(event, nft, token_id, actor, block, log_index=0, price=None, seller
         'transactionIndex': '0x',
     }
 
+
+
+
+
+
+
+
+############################################################
+# STORY_LOGS
+############################################################
+#
+# The marketplace story the frontend suite's fixtures tell,
+# as Etherscan hands it over, oldest first: a classmate lists
+# PUG #0 and lowers its price; the student lists PUG #1 and
+# PUG #2 and sells PUG #2; the classmate lists two tokens of
+# the ART collection, cancels one and lists a third.
+#
+# Used by:
+#   - test_indexer.py, test_api_routes.py — the replay and
+#     the answers built from it
+############################################################
 
 STORY_LOGS = [
     make_log('Listed', PUGS, 0, SELLER, 9712004, price=wei('0.08'), tx_hash=TX['pug0Listed']),
@@ -372,7 +505,7 @@ class DbTestCase(unittest.TestCase):
 #
 # Used by:
 #   - test_indexer.py, test_pinner.py, test_ownership.py,
-#     test_api_routes.py and the defect files
+#     test_api_routes.py
 ############################################################
 
 class FakeEtherscan:
@@ -433,19 +566,16 @@ class FakeEtherscan:
 
 
 ############################################################
-# abi_string / nft_transfer
+# abi_string
 ############################################################
 #
-# abi_string is a string-returning function's eth_call result
-# — the head/tail ABI encoding the pinner decodes: an offset
-# word, a length word, the UTF-8 bytes padded to whole words.
-# nft_transfer is one entry of Etherscan's tokennfttx history,
-# with the fields the holdings replay reads and the ones
-# around them.
+# A string-returning function's eth_call result — the
+# head/tail ABI encoding the pinner decodes: an offset word,
+# a length word, the UTF-8 bytes padded to whole words.
 #
 # Used by:
-#   - FakeEtherscan (above), test_pinner.py
-#   - test_ownership.py, test_api_routes.py
+#   - FakeEtherscan (above) — its tokenURI answers
+#   - test_etherscan.py, test_pinner.py
 ############################################################
 
 def abi_string(text):
@@ -453,6 +583,23 @@ def abi_string(text):
     padded = raw + b'\x00' * (-len(raw) % 32)
     return '0x' + _word(32) + _word(len(raw)) + padded.hex()
 
+
+
+
+
+
+
+
+############################################################
+# nft_transfer
+############################################################
+#
+# One entry of Etherscan's tokennfttx history, with the
+# fields the holdings replay reads and the ones around them.
+#
+# Used by:
+#   - test_etherscan.py, test_ownership.py, test_api_routes.py
+############################################################
 
 def nft_transfer(nft, token_id, sender, recipient, block):
     return {
@@ -475,20 +622,17 @@ def nft_transfer(nft, token_id, sender, recipient, block):
 
 
 ############################################################
-# etherscan_response / scripted_get
+# etherscan_response
 ############################################################
 #
-# etherscan_response is a REAL requests.Response carrying a
-# JSON body and a status, its URL the one requests itself
-# prepares from the call (so raise_for_status words its error
-# exactly as it would live). scripted_get stands in for
-# requests.get: each reply answers the NEXT call — a body (a
-# 200 response is built for it), a ready response, or an
-# exception to raise — and every call's URL, params and
-# timeout are recorded.
+# A REAL requests.Response carrying a JSON body and a status,
+# its URL the one requests itself prepares from the call —
+# so raise_for_status words its error exactly as it would
+# live.
 #
 # Used by:
-#   - test_etherscan.py, the routes defect file
+#   - scripted_get (below) — every body it answers with
+#   - test_etherscan.py, test_api_routes.py
 ############################################################
 
 def etherscan_response(payload, status=200, url=None, params=None):
@@ -501,6 +645,25 @@ def etherscan_response(payload, status=200, url=None, params=None):
     response.encoding = 'utf-8'
     return response
 
+
+
+
+
+
+
+
+############################################################
+# scripted_get
+############################################################
+#
+# Stands in for requests.get: each reply answers the NEXT
+# call — a body (a 200 response is built for it), a ready
+# response, or an exception to raise — and every call's URL,
+# params and timeout are recorded.
+#
+# Used by:
+#   - test_etherscan.py, test_api_routes.py
+############################################################
 
 def scripted_get(replies, calls=None):
     queue = list(replies)
@@ -543,7 +706,7 @@ def scripted_get(replies, calls=None):
 # every request.
 #
 # Used by:
-#   - test_pinner.py, the pinner defect file
+#   - test_pinner.py
 ############################################################
 
 class FakeKubo:
@@ -619,21 +782,16 @@ class FakeKubo:
 
 
 ############################################################
-# quiet / StopLoop / sleeps
+# quiet
 ############################################################
 #
-# quiet captures what the daemons print — their log is
-# stdout — so a passing run reads clean, and hands the text
-# back for the tests that assert on it. StopLoop ends a daemon
-# loop from inside: it is a BaseException, so the loops'
-# catch-all `except Exception` lets it through. sleeps stands
-# in for time.sleep, records every pause and raises StopLoop
-# at the given call, so a test runs a loop exactly so many
-# rounds without waiting.
+# Captures what the daemons print — their log is stdout — so
+# a passing run reads clean, and hands the text back for the
+# tests that assert on it.
 #
 # Used by:
-#   - test_indexer.py, test_pinner.py, test_etherscan.py,
-#     test_main.py and the defect files
+#   - test_indexer.py, test_pinner.py, test_main.py,
+#     test_api_routes.py
 ############################################################
 
 @contextlib.contextmanager
@@ -643,9 +801,45 @@ def quiet():
         yield captured
 
 
+
+
+
+
+
+
+############################################################
+# StopLoop
+############################################################
+#
+# Ends a daemon loop from inside: a BaseException, so the
+# loops' catch-all for every Exception lets it through.
+#
+# Used by:
+#   - sleeps (below) — raised at the chosen pause
+#   - test_indexer.py, test_pinner.py
+############################################################
+
 class StopLoop(BaseException):
     pass
 
+
+
+
+
+
+
+
+############################################################
+# sleeps
+############################################################
+#
+# Stands in for time.sleep: records every pause and raises
+# StopLoop at the given call, so a test runs a loop exactly
+# so many rounds without waiting.
+#
+# Used by:
+#   - test_indexer.py, test_pinner.py, test_etherscan.py
+############################################################
 
 def sleeps(stop_at=None):
     paused = []
@@ -676,8 +870,9 @@ def sleeps(stop_at=None):
 # that has a network.
 #
 # Used by:
-#   - the routes defect file — what a failed call tells the
+#   - test_api_routes.py — what a failed call tells the
 #     browser
+#   - test_etherscan.py — the client's own error text
 ############################################################
 
 @contextlib.contextmanager
@@ -699,16 +894,17 @@ def no_dns():
 # make_app
 ############################################################
 #
-# The backend's Flask app the way `python main.py` assembles
-# it, minus the daemons and the dev server: a fresh main
-# module (reloaded, so every test class gets an app object of
-# its own) with the marketplace blueprint registered on it
-# exactly as main.py's STEP 2 does. Nothing is started and no
-# database is touched — the route tests point the routes'
-# get_db_connection at their own file.
+# The backend's Flask app the way main.py assembles it when
+# the container starts it, minus the daemons and the dev
+# server: a fresh main module (reloaded, so every test class
+# gets an app object of its own) with the marketplace
+# blueprint registered on it exactly as main.py's STEP 3
+# does. Nothing is started and no database is touched — the
+# route tests point the routes' get_db_connection at their
+# own file.
 #
 # Used by:
-#   - test_api_routes.py, test_main.py, the routes defect file
+#   - test_api_routes.py, test_main.py
 ############################################################
 
 def make_app():
@@ -733,7 +929,8 @@ def make_app():
 # when dbgate holds a write on the shared file.
 #
 # Used by:
-#   - the indexer defect file
+#   - test_indexer.py — a database busy at boot
+#   - test_pinner.py — a database refusing one token's row
 ############################################################
 
 def sqlite_error(message='database is locked'):

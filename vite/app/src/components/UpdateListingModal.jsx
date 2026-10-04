@@ -168,6 +168,9 @@ function ListingManager({ nftAddress, tokenId, marketplaceAddress, onClose }) {
 // UpdateListingModal (default export)
 // -----------------------------------------------------------
 //
+// The body while the page shows the modal, nothing while it
+// is hidden — the body's price goes with it.
+//
 // Used by:
 //   - pages/NftDetail — the "Update Listing / Cancel" button
 // -----------------------------------------------------------

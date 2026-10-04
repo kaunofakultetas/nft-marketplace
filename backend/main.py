@@ -6,9 +6,8 @@
 #  every NFT's files as permanent IPFS pins (pinner.py) and
 #  SERVES everything the Vite GUI reads (routes.py). Every
 #  setting comes from ENV VARS on the nft-backend compose
-#  service — changing one takes a
-#  `docker-compose up -d nft-backend`, never an image
-#  rebuild.
+#  service — changing one takes re-creating the container,
+#  never an image rebuild.
 #
 #  Routes (the marketplace reads live in routes.py):
 #    GET /api/config
@@ -20,11 +19,15 @@
 #
 #  Used by:
 #    - app/marketplace/etherscan.py — the Etherscan settings
-#    - app/marketplace/indexer.py — the contract address and
-#      the indexer tuning knobs
+#    - app/marketplace/indexer.py — the contract address, its
+#      event topics and the indexer tuning knob
+#    - app/marketplace/pinner.py — the kubo API and the pinner
+#      tuning knobs
+#    - app/marketplace/routes.py — the relay's upstream, the
+#      contract address, the chain id and the event topics
 #    - vite/app/src/config.js — GET /api/config before React
 #      mounts
-#    - Dockerfile — CMD ["python3", "-u", "main.py"]
+#    - Dockerfile — the container's start command
 ############################################################
 
 
@@ -43,12 +46,11 @@ app = Flask(__name__)
 
 
 
-
 ############################################################
 # Settings — assembled from the compose environment
 ############################################################
 #
-# The first four env vars are REQUIRED — a missing one kills
+# The first three env vars are REQUIRED — a missing one kills
 # the boot with a precise error in the container logs
 # instead of becoming a broken GUI later. Everything else
 # has defaults and only needs a compose entry to override.
@@ -144,7 +146,6 @@ FRONTEND_CONFIG = {
 
 
 
-
 ############################################################
 # get_config
 ############################################################
@@ -152,10 +153,10 @@ FRONTEND_CONFIG = {
 # GET /api/config
 #
 # The Vite GUI's runtime configuration as one JSON object —
-# contract address, RPC/Etherscan endpoints and the
-# same-origin subgraph/IPFS paths. Everything in it ends up
-# in the browser, so nothing here is secret — treat it as
-# public.
+# the contract address, the RPC relay's same-origin path,
+# the IPFS gateway prefix and its timeout. Everything in it
+# ends up in the browser, so nothing here is secret — treat
+# it as public.
 #
 # Used by:
 #   - vite/app/src/config.js — loadConfig() before React
@@ -173,15 +174,15 @@ def get_config():
 
 
 
-
 ############################################################
 # Entrypoint
 ############################################################
 #
-# Wires the whole backend when run directly: schema, the
-# marketplace blueprint, the indexer daemon, then the dev
-# server. Debug mode means hot reload AND the Werkzeug
-# debugger — never expose it publicly.
+# Wires the whole backend when run directly: the schema, the
+# proxy headers, the marketplace blueprint, the indexer and
+# pinner daemons, then the dev server. Debug mode means hot
+# reload AND the Werkzeug debugger — never expose it
+# publicly.
 ############################################################
 
 if __name__ == '__main__':
@@ -194,26 +195,23 @@ if __name__ == '__main__':
     init_db()
 
 
-
     # STEP 2: ProxyFix for correct IP address detection.
     # ==================================================
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 
-
-    # STEP 2: the marketplace read API.
+    # STEP 3: the marketplace read API.
     # =================================
     from app.marketplace.routes import bp_marketplace
     app.register_blueprint(bp_marketplace, url_prefix='')
 
 
-
-    # STEP 3: the daemons — the indexer (chain → SQLite) and the
+    # STEP 4: the daemons — the indexer (chain → SQLite) and the
     # pinner (NFT files → permanent IPFS pins). In debug mode
     # Werkzeug runs TWO processes (reloader parent + serving child)
     # — the guard starts the threads only in the child, or exactly
     # once without debug.
-    # ==============================================================
+    # =============================================================
     if not APP_DEBUG or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         from app.marketplace.etherscan import EtherscanClient
         from app.marketplace.indexer import MarketplaceIndexer, reset_if_contract_changed
@@ -229,7 +227,6 @@ if __name__ == '__main__':
         Pinner(etherscan).start()
 
 
-
-    # STEP 4: the dev server.
+    # STEP 5: the dev server.
     # =======================
     app.run(host='0.0.0.0', port=8000, debug=APP_DEBUG)

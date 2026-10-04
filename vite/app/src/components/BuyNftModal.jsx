@@ -28,6 +28,9 @@ import { formatEth, formatWalletError } from '@/utils/format';
 // BuyNftModal (default export)
 // -----------------------------------------------------------
 //
+// The question with the price in ether, Cancel, and OK —
+// which sends the purchase; nothing at all while hidden.
+//
 // Used by:
 //   - pages/NftDetail — the "Buy Now" button
 // -----------------------------------------------------------

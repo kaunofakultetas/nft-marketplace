@@ -5,7 +5,7 @@
 #  NftMarketplace contract on Sepolia: contract logs come
 #  from the EtherscanClient (no block-range caps — see
 #  etherscan.py), get decoded by hand into
-#  Marketplace_Events and replayed into
+#  Marketplace_Events and turned into
 #  Marketplace_ActiveListings. Replaces the graph-node +
 #  postgres + subgraph stack entirely.
 #
@@ -26,7 +26,7 @@
 #  touched has its listing re-derived from its latest event.
 #
 #  Used by:
-#    - main.py — one instance, started at startup (STEP 3)
+#    - main.py — one instance, started at startup (STEP 4)
 ############################################################
 
 
@@ -63,7 +63,6 @@ REORG_OVERLAP_BLOCKS = 10
 
 
 
-
 ############################################################
 # reset_if_contract_changed
 ############################################################
@@ -83,7 +82,7 @@ REORG_OVERLAP_BLOCKS = 10
 # that is its whole point.
 #
 # Used by:
-#   - main.py — startup STEP 3, before the daemons start
+#   - main.py — startup STEP 4, before the daemons start
 ############################################################
 
 def reset_if_contract_changed():
@@ -108,7 +107,6 @@ def reset_if_contract_changed():
 
     print(f'[indexer] marketplace contract is {current} (database was built for: {stored or "unset"}) '
           f'— marketplace state reset, backfilling from scratch', flush=True)
-
 
 
 
@@ -179,7 +177,6 @@ def _decode_log(log):
 
 
 
-
 ############################################################
 # MarketplaceIndexer
 ############################################################
@@ -191,7 +188,8 @@ def _decode_log(log):
 #   store — _store_logs, _relist
 #
 # Used by:
-#   - main.py — MarketplaceIndexer(EtherscanClient()).start()
+#   - main.py — one instance over the client the daemons
+#     share, started at startup (STEP 4)
 ############################################################
 
 class MarketplaceIndexer:
@@ -209,7 +207,7 @@ class MarketplaceIndexer:
     # to the chain.
     #
     # Used by:
-    #   - main.py — startup STEP 3
+    #   - main.py — startup STEP 4
     ############################################################
 
     def __init__(self, etherscan):
@@ -228,7 +226,7 @@ class MarketplaceIndexer:
     # with Flask, nothing to join on shutdown.
     #
     # Used by:
-    #   - main.py — startup STEP 3
+    #   - main.py — startup STEP 4
     ############################################################
 
     def start(self):
@@ -264,7 +262,7 @@ class MarketplaceIndexer:
         # STEP 2: the scan loop — each fetch starts a small overlap
         # below the resume point (reorg safety, see the file header).
         # Any failure (rate limits included) just waits and retries.
-        # ============================================================
+        # ===========================================================
         while True:
             try:
                 if last_scanned is None:

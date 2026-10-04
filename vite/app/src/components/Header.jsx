@@ -2,7 +2,8 @@
 //  [*] Header — the burgundy top bar
 //
 //  Sticky on every page: KNF logo + wordmark linking back to
-//  "/", the five nav links and RainbowKit's Connect button.
+//  "/", the five nav links and the wallet button
+//  (ConnectButton).
 //  The current page's pill stays filled white — NavLink's
 //  isActive drives it, with `end` on "/" so Home doesn't
 //  claim every route.
@@ -25,6 +26,9 @@ import ConnectButton from '@/components/ConnectButton';
 // -----------------------------------------------------------
 // NavItem
 // -----------------------------------------------------------
+//
+// One nav link as a white pill — filled while its page is
+// the one shown, Home only on "/" itself.
 //
 // Used by:
 //   - Header (below)
@@ -56,6 +60,9 @@ function NavItem({ to, children }) {
 // -----------------------------------------------------------
 // Header (default export)
 // -----------------------------------------------------------
+//
+// The bar: the wordmark on the left, the links and the
+// wallet button on the right, wrapping on narrow screens.
 //
 // Used by:
 //   - App.jsx — rendered above the routed page

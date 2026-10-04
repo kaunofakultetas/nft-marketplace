@@ -2,9 +2,9 @@
 
 /* Brand palette — the KNF burgundy shared by the header, the
    footer and every primary action, with the house raspberry
-   hover (same values as the crypto-faucet GUI). Consumed
-   through Tailwind arbitrary values: bg-[var(--color-primary)],
-   hover:bg-[var(--color-primary-hover)] etc. */
+   hover. Plain custom properties, read through Tailwind's
+   arbitrary values — there is no @theme block, so no
+   bg-primary-style utilities exist. */
 :root {
   --color-primary: #78003F;
   --color-primary-hover: #E64164;

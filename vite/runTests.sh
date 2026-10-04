@@ -10,13 +10,15 @@
 #  no network at all: the suite answers every request itself
 #  (tests/support), so a request it forgot can never reach a
 #  real backend, chain or IPFS node. Extra arguments go to
-#  vitest (a file, -t "name", --coverage …).
+#  vitest — a file or a folder, a test-name filter, the
+#  coverage report.
 #
-#  While developing, the dev container is quicker (the stack
-#  running Dockerfile.dev, see docker-compose.yml):
-#    sudo docker exec -it -w /app -e TMPDIR=/app/node_modules/.tmp nft-vite npx vitest run
-#  (its root filesystem is read-only — vitest's temp files go
-#  under node_modules/.tmp, on disk; /dev/shm is only 64 MB)
+#  While developing, running the suite inside the dev
+#  container is quicker (the stack running Dockerfile.dev,
+#  see docker-compose.yml); tests/README.md has the command
+#  — vitest's temp files must go under node_modules/.tmp
+#  there, as the container's root filesystem is read-only
+#  and /dev/shm only 64 MB.
 # -----------------------------------------------------------
 set -e
 cd "$(dirname "$0")"
