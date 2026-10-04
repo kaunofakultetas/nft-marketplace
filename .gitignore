@@ -1,6 +1,5 @@
 # Persistent data
-/_DATA
-/_OLD
+/_*
 .env
 /.claude
 

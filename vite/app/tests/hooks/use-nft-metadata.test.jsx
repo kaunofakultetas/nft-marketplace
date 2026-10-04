@@ -1,0 +1,302 @@
+// -----------------------------------------------------------
+//  [*] Tests — useNftMetadata (one NFT's metadata, diagnosed)
+//
+//  The one shared "what does this token look like": tokenURI
+//  read on-chain through the relay, the metadata JSON fetched
+//  through the course IPFS gateway, the image moved onto the
+//  gateway too. Pinned down here, through a probe component
+//  that shows what the hook hands back: the loading state; a
+//  healthy token (the course PUG, the student-made ART #0) —
+//  its name, description, gateway image and the "View JSON"
+//  URL; every DIAGNOSIS a wrongly minted token earns, each
+//  with the fallbacks it still shows (a placeholder image
+//  naming the token, the name and description the JSON did
+//  carry); a metadata file the gateway cannot deliver — gone,
+//  a dropped connection, the IPFS deadline passing; metadata
+//  on a plain web server, fetched where it lives; one read and
+//  one fetch per token however many components show it.
+//
+//  Pinned: the JSON's attributes never leave the hook; an
+//  empty tokenURI (OpenZeppelin's default without a base URI)
+//  and a metadata file holding JSON null leave the token
+//  loading for ever, undiagnosed; a relay that cannot be
+//  reached is blamed on the token, as a reverting tokenURI.
+// -----------------------------------------------------------
+
+import { describe, it, expect } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import { renderPage } from '../support/render';
+import { http, HttpResponse } from 'msw';
+import { server, given, url } from '../support/backend/server';
+import { withConfig } from '../support/setup';
+import { settle } from '../support/backend/contract';
+import { watchRequests } from '../support/shell/requests';
+import { DIAGNOSES, DIAGNOSED_TOKENS } from '../support/diagnoses';
+import * as f from '../support/backend/fixtures';
+import { sepolia } from '../support/chain/sepolia';
+import { useNftMetadata } from '@/hooks/useNftMetadata';
+
+
+// The grey placeholder the hook gives a token without a
+// usable image — the token id is written into the SVG
+const PLACEHOLDER = (tokenId) => expect.stringMatching(new RegExp(`^data:image/svg\\+xml,.*NFT %23${tokenId}%3C`));
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------
+//
+// MetadataProbe renders the hook's answer as JSON (one probe
+// per token, tagged by its id); renderProbe mounts probes for
+// tokens in the production frame; probeOf reads one back, and
+// settled waits until it is no longer loading.
+// -----------------------------------------------------------
+
+function MetadataProbe({ nftAddress, tokenId }) {
+  const answer = useNftMetadata(nftAddress, tokenId);
+  return <output data-testid={`probe-${nftAddress}-${tokenId}`}>{JSON.stringify(answer)}</output>;
+}
+
+const renderProbe = (...tokens) => renderPage(
+  <>{tokens.map(([nftAddress, tokenId], i) => <MetadataProbe key={i} nftAddress={nftAddress} tokenId={tokenId} />)}</>,
+);
+
+const probeOf = (nftAddress, tokenId) => JSON.parse(screen.getAllByTestId(`probe-${nftAddress}-${tokenId}`)[0].textContent);
+
+async function settled(nftAddress, tokenId) {
+  await waitFor(() => expect(probeOf(nftAddress, tokenId).loading).toBe(false));
+  return probeOf(nftAddress, tokenId);
+}
+
+const diagnosed = (key) => {
+  const { nftAddress, tokenId } = DIAGNOSED_TOKENS[key];
+  renderProbe([nftAddress, tokenId]);
+  return settled(nftAddress, tokenId);
+};
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// Healthy tokens
+// -----------------------------------------------------------
+
+describe('Healthy tokens', () => {
+
+  it('is loading — with nothing to show yet — until the tokenURI and the metadata are in', async () => {
+    given.hang('get', '/ipfs/*');
+    renderProbe([f.PUGS, '0']);
+    expect(probeOf(f.PUGS, '0')).toEqual({ problem: null, metadataURL: null, loading: true });
+    await waitFor(() => expect(probeOf(f.PUGS, '0').metadataURL).toBe(f.PUG_JSON_URL));
+    expect(probeOf(f.PUGS, '0').loading).toBe(true);
+  });
+
+
+  it('hands back the course PUG — its name and description, its image and its JSON on the local gateway', async () => {
+    renderProbe([f.PUGS, '0']);
+    expect(await settled(f.PUGS, '0')).toEqual({
+      metadata: { name: 'PUG', description: 'An adorable PUG pup!', image: f.PUG_IMAGE_URL },
+      problem: null,
+      metadataURL: f.PUG_JSON_URL,
+      loading: false,
+    });
+  });
+
+
+  it('moves an ipfs:// image inside the metadata onto the gateway as well', async () => {
+    renderProbe([f.ART, '0']);
+    const answer = await settled(f.ART, '0');
+    expect(answer.metadata).toEqual({ name: 'Vilnius at Dusk', description: f.ART_0_METADATA.description, image: `/ipfs/${f.ART_DIR}/0.png` });
+    expect(answer.metadataURL).toBe(`/ipfs/${f.ART_DIR}/0.json`);
+  });
+
+
+  it('fetches metadata hosted on a plain web server where it lives', async () => {
+    sepolia.setTokenURI(f.ART, '0', 'https://nft.example.org/meta/0.json');
+    given.json('get', 'https://nft.example.org/meta/0.json', { name: 'Hosted elsewhere', description: 'Not on IPFS', image: 'https://nft.example.org/img/0.png' });
+    renderProbe([f.ART, '0']);
+    expect(await settled(f.ART, '0')).toEqual({
+      metadata: { name: 'Hosted elsewhere', description: 'Not on IPFS', image: 'https://nft.example.org/img/0.png' },
+      problem: null,
+      metadataURL: 'https://nft.example.org/meta/0.json',
+      loading: false,
+    });
+  });
+
+
+  it('names the token itself when the JSON carries no name, and leaves the description empty', async () => {
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, { image: `ipfs://${f.ART_DIR}/0.png` });
+    renderProbe([f.ART, '0']);
+    expect((await settled(f.ART, '0')).metadata).toEqual({ name: 'NFT #0', description: '', image: `/ipfs/${f.ART_DIR}/0.png` });
+  });
+
+
+  it('reads each token once and fetches its metadata once, however many components show it', async () => {
+    const fetched = watchRequests('/ipfs/*');
+    renderProbe([f.ART, '0'], [f.ART, '0'], [f.ART, '0']);
+    await settled(f.ART, '0');
+    await settle(100);
+    expect(sepolia.readsOf('tokenURI')).toEqual([{ to: f.ART, functionName: 'tokenURI', args: [0n], via: 'multicall' }]);
+    expect(fetched).toEqual([`GET /ipfs/${f.ART_DIR}/0.json`]);
+  });
+
+
+  it.fails('hands back the JSON\'s attributes too — PINNED KNOWN BUG: only name, description and image leave the hook, so the detail page\'s Attributes panel never renders', async () => {
+    renderProbe([f.PUGS, '0']);
+    expect((await settled(f.PUGS, '0')).metadata.attributes).toEqual(f.PUG_METADATA.attributes);
+  });
+});
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// Wrongly minted tokens
+// -----------------------------------------------------------
+//
+// Each diagnosis with what the token still shows.
+// -----------------------------------------------------------
+
+describe('Wrongly minted tokens', () => {
+
+  it('diagnoses a tokenURI that points at an image — and still shows that image', async () => {
+    const answer = await diagnosed('imageAsUri');
+    expect(answer.problem).toEqual(DIAGNOSES.imageAsUri);
+    expect(answer.metadata).toEqual({ name: 'NFT #1', description: '', image: `/ipfs/${f.ART_1_IMAGE_CID}` });
+  });
+
+
+  it('diagnoses metadata that is not JSON — the token named by its id, a placeholder image', async () => {
+    const answer = await diagnosed('notJson');
+    expect(answer.problem).toEqual(DIAGNOSES.notJson);
+    expect(answer.metadata).toEqual({ name: 'NFT #2', description: '', image: PLACEHOLDER(2) });
+  });
+
+
+  it('diagnoses JSON without an "image" field — keeping the name and description it does carry', async () => {
+    const answer = await diagnosed('noImage');
+    expect(answer.problem).toEqual(DIAGNOSES.noImage);
+    expect(answer.metadata).toEqual({ name: 'Curonian Spit', description: 'The dunes of Nida at noon.', image: PLACEHOLDER(3) });
+  });
+
+
+  it('diagnoses the non-standard "image_url" — and does not show the image it names', async () => {
+    const answer = await diagnosed('imageUrlField');
+    expect(answer.problem).toEqual(DIAGNOSES.imageUrlField);
+    expect(answer.metadata).toEqual({ name: 'Kaunas Castle', description: 'Red brick on the river bend.', image: PLACEHOLDER(4) });
+  });
+
+
+  it('diagnoses metadata nobody hosts any more — the gateway gave up', async () => {
+    const answer = await diagnosed('unreachable');
+    expect(answer.problem).toEqual(DIAGNOSES.unreachable);
+    expect(answer.metadata).toEqual({ name: 'NFT #5', description: '', image: PLACEHOLDER(5) });
+    expect(answer.metadataURL).toBe(`/ipfs/${f.LOST_DIR}/5.json`);
+  });
+
+
+  it('diagnoses a burned token\'s reverting tokenURI without fetching anything', async () => {
+    const fetched = watchRequests('/ipfs/*');
+    const answer = await diagnosed('revert');
+    expect(answer).toEqual({
+      metadata: { name: 'NFT #6', description: '', image: PLACEHOLDER(6) },
+      problem: DIAGNOSES.revert,
+      metadataURL: null,
+      loading: false,
+    });
+    expect(fetched).toEqual([]);
+  });
+
+
+  it('diagnoses an address with no contract at all as a reverting tokenURI', async () => {
+    renderProbe([f.SELLER, '0']);
+    expect((await settled(f.SELLER, '0')).problem).toEqual(DIAGNOSES.revert);
+  });
+
+
+  it('takes any image content type for an image where the JSON should be', async () => {
+    server.use(http.get(url(`/ipfs/${f.ART_DIR}/0.json`), () => (
+      new HttpResponse('<svg xmlns="http://www.w3.org/2000/svg"/>', { headers: { 'Content-Type': 'image/svg+xml' } })
+    )));
+    renderProbe([f.ART, '0']);
+    expect((await settled(f.ART, '0')).problem).toEqual(DIAGNOSES.imageAsUri);
+  });
+
+
+  it.fails('diagnoses an empty tokenURI — OpenZeppelin\'s default without a base URI — PINNED KNOWN BUG: the metadata query never starts, the token stays loading for ever', async () => {
+    sepolia.setTokenURI(f.ART, '0', '');
+    renderProbe([f.ART, '0']);
+    await settle(1500);
+    expect(probeOf(f.ART, '0').loading).toBe(false);
+  });
+
+
+  it.fails('diagnoses a metadata file holding JSON null — PINNED KNOWN BUG: reading its name throws, the query fails and the token stays undiagnosed with no metadata', async () => {
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, null);
+    renderProbe([f.ART, '0']);
+    const answer = await settled(f.ART, '0');
+    expect(answer.metadata).toBeDefined();
+    expect(answer.problem).not.toBeNull();
+  });
+});
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// The metadata file cannot be delivered
+// -----------------------------------------------------------
+
+describe('The metadata file cannot be delivered', () => {
+
+  it.each([
+    ['the gateway answers 404', () => given.empty('get', '/ipfs/*', 404)],
+    ['the connection drops', () => given.networkError('get', '/ipfs/*')],
+  ])('diagnoses an unreachable file when %s', async (_, respond) => {
+    respond();
+    renderProbe([f.PUGS, '0']);
+    expect((await settled(f.PUGS, '0')).problem).toEqual(DIAGNOSES.unreachable);
+  });
+
+
+  it('gives up on a gateway that never answers once the IPFS deadline has passed', async () => {
+    await withConfig({ ipfsTimeout: 200 });
+    given.hang('get', '/ipfs/*');
+    renderProbe([f.PUGS, '0']);
+    expect((await settled(f.PUGS, '0')).problem).toEqual(DIAGNOSES.unreachable);
+  });
+});
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// The chain cannot be read
+// -----------------------------------------------------------
+
+describe('The chain cannot be read', () => {
+
+  it.fails('does not blame the token when the RPC relay is down — PINNED KNOWN BUG: every token is diagnosed as "tokenURI() reverts on-chain"', async () => {
+    given.json('post', '/api/rpc', { error: 'RPC relay failed: Read timed out.' }, { status: 502 });
+    renderProbe([f.PUGS, '0']);
+    const answer = await settled(f.PUGS, '0');
+    expect(answer.problem?.message).not.toBe(DIAGNOSES.revert.message);
+  });
+});
