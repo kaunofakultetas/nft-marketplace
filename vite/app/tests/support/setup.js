@@ -23,10 +23,7 @@
 //      the toasts (react-hot-toast keeps them in a module-level
 //      store), the Sepolia double's state, timers, stubbed
 //      globals (the wallet double), environment variables,
-//      mocks — and every ethers JsonRpcProvider the code
-//      under test created, destroyed: ethers retries a dead
-//      RPC forever, which would otherwise carry one test's
-//      requests into the next
+//      mocks
 //    - the students' time zone (Europe/Vilnius) for every
 //      test — the dates the pages show are local times; a test
 //      may stub another
@@ -66,44 +63,6 @@ const FATAL_CONSOLE_PATTERNS = [
   /Invalid hook call/,
   /Objects are not valid as a React child/,
 ];
-
-// Every ethers JsonRpcProvider created during the current
-// test (the mock below records them) — destroyed after it
-const { providers } = vi.hoisted(() => ({ providers: new Set() }));
-
-
-
-
-
-
-
-// -----------------------------------------------------------
-// The ethers provider record
-// -----------------------------------------------------------
-//
-// ethers exactly as it is, except that every JsonRpcProvider
-// it builds is remembered so afterEach can destroy it. The
-// pages build one per owner lookup and per approval wait and
-// never destroy it; against a relay that does not answer, a
-// provider retries its network detection every second for
-// ever.
-//
-// Used by:
-//   - every test, implicitly (pages/NftDetail, pages/SellNft)
-// -----------------------------------------------------------
-
-vi.mock('ethers', async (importOriginal) => {
-  const actual = await importOriginal();
-
-  class JsonRpcProvider extends actual.JsonRpcProvider {
-    constructor(...args) {
-      super(...args);
-      providers.add(this);
-    }
-  }
-
-  return { ...actual, JsonRpcProvider, ethers: { ...actual.ethers, JsonRpcProvider } };
-});
 
 
 
@@ -197,48 +156,6 @@ afterAll(() => {
 
 
 // -----------------------------------------------------------
-// catchUnhandledRejections
-// -----------------------------------------------------------
-//
-// For a test about code that lets a promise rejection escape
-// (an async event handler that throws outside its try): takes
-// over the process' unhandledRejection event for the rest of
-// the test and hands back the list of what escaped — vitest's
-// own listeners would otherwise fail the whole run for it.
-// They are put back after the test.
-//
-// Used by:
-//   - pages/sell-nft.test.jsx — a price ethers cannot parse
-// -----------------------------------------------------------
-
-let vitestRejectionListeners = null;
-
-export function catchUnhandledRejections() {
-  const escaped = [];
-  vitestRejectionListeners = process.listeners('unhandledRejection');
-  process.removeAllListeners('unhandledRejection');
-  process.on('unhandledRejection', (reason) => escaped.push(reason));
-  return escaped;
-}
-
-// Put back after a macrotask, so what the test's cleanup
-// itself lets escape (a provider destroyed with a request
-// pending) is still caught for it
-async function restoreRejectionListeners() {
-  if (!vitestRejectionListeners) return;
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  process.removeAllListeners('unhandledRejection');
-  for (const listener of vitestRejectionListeners) process.on('unhandledRejection', listener);
-  vitestRejectionListeners = null;
-}
-
-
-
-
-
-
-
-// -----------------------------------------------------------
 // withConfig
 // -----------------------------------------------------------
 //
@@ -303,8 +220,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   cleanup();
-  for (const provider of providers) provider.destroy();
-  providers.clear();
   server.resetHandlers();
   localStorage.clear();
   sessionStorage.clear();
@@ -313,7 +228,6 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  await restoreRejectionListeners();
   console.error = originalConsoleError;
 
   if (unhandledRequests.length && !unhandledAllowed) {

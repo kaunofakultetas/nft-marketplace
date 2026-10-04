@@ -2,8 +2,9 @@
 //  [*] Test support — the NFT detail page, mounted and read
 //
 //  The detail page loads progressively from three sources (the
-//  metadata through IPFS, the owner through ethers and the
-//  relay, the listing, history and archive from the backend),
+//  metadata through IPFS, the owner through the relay on its
+//  own request, the listing, history and archive from the
+//  backend),
 //  each filling its own panels. The tests of its folder share
 //  how they mount it and how they read its panels:
 //

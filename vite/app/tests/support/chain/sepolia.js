@@ -3,14 +3,15 @@
 //
 //  The SPA reads the chain only through the backend's
 //  JSON-RPC relay (POST /api/rpc): wagmi's http transport for
-//  tokenURI, getProceeds and the wallet's balance, ethers'
-//  JsonRpcProvider for ownerOf and for waiting on a
-//  transaction. This module is the chain those requests reach
+//  tokenURI, ownerOf, getProceeds and the wallet's balance,
+//  and for waiting on a transaction's receipt. This module is
+//  the chain those requests reach
 //  — a small in-memory Sepolia that speaks JSON-RPC the way
 //  Infura does:
 //
-//    - single requests and batches (ethers batches whatever
-//      it sends within a few milliseconds)
+//    - single requests and batches (JSON-RPC lets a client
+//      send several calls in one post, and the relay passes
+//      them on untouched)
 //    - eth_call against the contracts it knows, and against
 //      Multicall3's aggregate3 — viem folds the page's
 //      concurrent reads into one such call, each read
@@ -521,7 +522,7 @@ function execute(state, { from, to, data = '0x', value = 0n }, { via = 'direct',
 // copy of the state and keeps the copy only when the contract
 // accepted it (a refused transaction changes nothing but still
 // lands, with status 0); the sender pays the value it sent.
-// The receipt carries every field ethers reads from one.
+// The receipt carries every field a client reads from one.
 //
 // Used by:
 //   - sepolia.submit, sepolia.mine (below)

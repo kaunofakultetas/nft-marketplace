@@ -3,7 +3,8 @@
 //
 //  toGatewayURL moves every IPFS-addressed URI onto the course
 //  node's gateway at the configured prefix — ipfs:// URIs with
-//  a path and a query, path gateways on any host (ipfs.io,
+//  a path and a query, the legacy ipfs://ipfs/ form without
+//  its extra segment, path gateways on any host (ipfs.io,
 //  Pinata, a node of one's own), subdomain gateways whose CID
 //  rides in the host name — and leaves everything else where it
 //  lives (Arweave, a plain web server, a data: URI, an IPNS
@@ -77,7 +78,7 @@ describe('toGatewayURL', () => {
   });
 
 
-  it.fails('moves the legacy ipfs://ipfs/<cid> form onto the gateway — PINNED KNOWN BUG: it becomes /ipfs/ipfs/<cid>, a path no gateway resolves', () => {
+  it('moves the legacy ipfs://ipfs/<cid> form onto the gateway without its extra ipfs/', () => {
     expect(toGatewayURL(`ipfs://ipfs/${f.ART_1_IMAGE_CID}`)).toBe(`/ipfs/${f.ART_1_IMAGE_CID}`);
   });
 });

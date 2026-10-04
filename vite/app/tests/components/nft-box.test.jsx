@@ -4,8 +4,10 @@
 //  The marketplace card as Home and My NFTs show it: a grey
 //  skeleton until the token's metadata is in, then the image
 //  first (on the local gateway, its alt the token's name), the
-//  name, the price in ether — or "Not for sale" — the
-//  description, the token id and who owns it: the seller's
+//  name, the price in ether — "Not for sale" without one,
+//  "Price unknown" for one it cannot read or a listing the
+//  page could not load — the description, the token id and
+//  who owns it: the seller's
 //  short address with the full one on hover, "you" for the
 //  student's own listing (the backend's lowercase seller
 //  against wagmi's checksummed account) and for a token passed
@@ -109,6 +111,18 @@ describe('The card', () => {
     renderBox({ ...PUG_0, price: undefined, seller: undefined });
     await nameOf('PUG');
     expect(screen.getByText('Not for sale')).toBeInTheDocument();
+    expect(screen.queryByText(/ETH/)).toBeNull();
+  });
+
+
+  it.each([
+    ['a price it cannot read', { price: '💾 <b>cheap</b>' }],
+    ['a listing the page could not load', { price: undefined, seller: undefined, priceUnknown: true }],
+  ])('says "Price unknown" for %s — never "Not for sale"', async (_, props) => {
+    renderBox({ ...PUG_0, ...props });
+    await nameOf('PUG');
+    expect(screen.getByText('Price unknown')).toBeInTheDocument();
+    expect(screen.queryByText('Not for sale')).toBeNull();
     expect(screen.queryByText(/ETH/)).toBeNull();
   });
 

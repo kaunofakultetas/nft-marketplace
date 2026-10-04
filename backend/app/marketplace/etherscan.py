@@ -27,6 +27,7 @@ import time
 
 import requests
 
+from app.marketplace.failures import describe_request_failure
 from main import ETHERSCAN_API_URL, SEPOLIA_CHAIN_ID, ETHERSCAN_API_KEY
 
 
@@ -90,23 +91,31 @@ class EtherscanClient:
     ############################################################
     #
     # One Etherscan V2 API call with the shared identity
-    # params. Raises on transport errors — callers decide what
-    # a payload-level error means for their action, because
-    # Etherscan reports "no results" as an error-shaped
-    # response.
+    # params. A transport failure, an HTTP error status or an
+    # answer that is not JSON raises a RuntimeError saying so
+    # WITHOUT the request's URL — requests' own error text
+    # carries the query string, API key included, and these
+    # errors end up in the container log and in /api/my-nfts
+    # answers (`from None` keeps the original out of the
+    # traceback too). Callers decide what a payload-level
+    # error means for their action, because Etherscan reports
+    # "no results" as an error-shaped response.
     #
     # Used by:
     #   - every public method (below)
     ############################################################
 
     def _get(self, params):
-        response = requests.get(ETHERSCAN_API_URL, params={
-            'chainid': SEPOLIA_CHAIN_ID,
-            'apikey': ETHERSCAN_API_KEY,
-            **params,
-        }, timeout=30)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = requests.get(ETHERSCAN_API_URL, params={
+                'chainid': SEPOLIA_CHAIN_ID,
+                'apikey': ETHERSCAN_API_KEY,
+                **params,
+            }, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as error:
+            raise RuntimeError(describe_request_failure(error, 'Etherscan')) from None
 
 
 

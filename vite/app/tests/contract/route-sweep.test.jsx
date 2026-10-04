@@ -2,9 +2,10 @@
 //  [*] Tests — the route sweep (every route × every backend state)
 //
 //  Every route of App.jsx, with a real token for the detail
-//  page, rendered through the real App (renderApp) for a
-//  returning student, under the conditions every page must
-//  tolerate whatever it does inside:
+//  page and an address no route knows for the catch-all,
+//  rendered through the real App (renderApp) for a returning
+//  student, under the conditions every page must tolerate
+//  whatever it does inside:
 //
 //    - the default backend — the route renders its page and
 //      makes only requests the doubles know (setup.js fails
@@ -12,7 +13,8 @@
 //      rel=noopener, its images an alt
 //    - every backend GET answering 500 with the backend's
 //      error body — the page shows ITS failure where it has
-//      one (My NFTs says the backend's sentence), otherwise
+//      one (the storefront, My NFTs, the activity feed and the
+//      NFT detail page say the backend's sentence), otherwise
 //      simply still stands; nothing crashes
 //    - every backend GET answering a JSON string — an answer
 //      of the wrong shape: nothing crashes
@@ -74,21 +76,19 @@ const text = (words) => () => within(main()).findByText(words);
 // -----------------------------------------------------------
 
 const ROUTES = [
-  { path: '/', shows: heading('NFTs For Sale') },
+  { path: '/', shows: heading('NFTs For Sale'), failed: (message) => text(`Error: ${message}`)() },
   { path: '/my-nfts', shows: heading('My NFTs'), failed: (message) => text(`Error: ${message}`)() },
   { path: '/sell-nft', shows: heading('Sell your NFT') },
-  { path: '/history', shows: heading('Marketplace Activity') },
+  { path: '/history', shows: heading('Marketplace Activity'), failed: (message) => text(`Error: ${message}`)() },
   { path: '/about', shows: heading('About this marketplace') },
-  { path: `/nft/${f.PUGS}/0`, shows: heading('PUG') },
+  { path: `/nft/${f.PUGS}/0`, shows: heading('PUG'), failed: (message) => text(`Error: ${message}`)() },
+  { path: '/no/such/page', shows: heading('Page not found') },
 ];
 
 // The route × state combinations that fail today, each with
 // what breaks — run as it.fails so the suite stays green
-// while the defect is on record
-const PINS = {
-  '/ × JSON string': 'the stats bar crashes the storefront on stats without a volume — ethers.formatUnits(undefined)',
-  '/about × JSON string': 'the instance facts crash the page on stats without a volume — ethers.formatUnits(undefined)',
-};
+// while the defect is on record. None at the moment
+const PINS = {};
 
 
 
@@ -147,11 +147,15 @@ const expectFailureShown = async (route, message) => {
 
 describe('route sweep', () => {
 
-  it('covers every route App.jsx declares', () => {
-    const swept = ROUTES.map((route) => route.path);
-    const uncovered = appRoutes()
-      .filter((route) => route.element)
-      .filter((route) => !swept.some((path) => new RegExp(`^${route.path.replace(/:\w+/g, '[^/]+')}$`).test(path)))
+  it('covers every route App.jsx declares — the catch-all by an address no other route knows', () => {
+    const declared = appRoutes().filter((route) => route.element);
+    const matches = (route, path) => new RegExp(`^${route.path.replace(/:\w+/g, '[^/]+')}$`).test(path);
+    const named = declared.filter((route) => route.path !== '*');
+    const reaches = (route, path) => (route.path === '*'
+      ? !named.some((other) => matches(other, path))
+      : matches(route, path));
+    const uncovered = declared
+      .filter((route) => !ROUTES.some(({ path }) => reaches(route, path)))
       .map((route) => route.path);
     expect(uncovered).toEqual([]);
   });
@@ -204,7 +208,7 @@ describe('route sweep', () => {
     // the chain — with the relay down it names the token by its
     // id instead; any title will do here
     runner('relay down')(named('relay down', 'survives every chain read failing at the RPC relay'), async () => {
-      given.json('post', '/api/rpc', apiError('RPC relay failed: Read timed out.'), { status: 502 });
+      given.json('post', '/api/rpc', apiError('RPC relay failed: the RPC provider did not answer in time'), { status: 502 });
       installMetamask({ connected: true });
       renderApp({ route: route.path });
       expect(await within(main()).findByRole('heading', { level: 1 })).toBeInTheDocument();

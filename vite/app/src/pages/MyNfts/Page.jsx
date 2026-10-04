@@ -6,7 +6,11 @@
 //  Etherscan server-side; the browser never talks to
 //  Etherscan and never sees the API key). Each owned token
 //  is matched against GET /api/listings so its card shows
-//  the current price when it is listed.
+//  the current price when it is listed — and when the
+//  listings cannot be read, the page says so and the cards
+//  call the price unknown rather than calling a listed token
+//  unlisted. A holdings answer without a list of tokens is
+//  read as holding none.
 //
 //  Used by:
 //    - App.jsx — route "/my-nfts"
@@ -44,12 +48,13 @@ export default function MyNftsPage() {
     enabled: Boolean(address),
   });
 
-  const { data: listingsData } = useQuery({
+  const { data: listingsData, error: listingsError } = useQuery({
     queryKey: ['listings'],
     queryFn: () => apiGet('/api/listings'),
   });
 
-  const myNfts = myNftsData?.nfts || [];
+  const myNfts = Array.isArray(myNftsData?.nfts) ? myNftsData.nfts : [];
+  const listings = Array.isArray(listingsData?.listings) ? listingsData.listings : [];
 
 
   if (!isConnected) {
@@ -93,6 +98,12 @@ export default function MyNftsPage() {
         </div>
       ) : (
         <>
+          {listingsError && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <p className="text-amber-800">The marketplace listings could not be loaded, so the prices are unknown: {listingsError.message}</p>
+            </div>
+          )}
+
           <div className="mb-6 flex justify-between items-center">
             <p className="text-gray-700">
               You own <strong>{myNfts.length}</strong> NFT{myNfts.length !== 1 ? 's' : ''}
@@ -109,7 +120,7 @@ export default function MyNftsPage() {
             {myNfts.map((nft) => {
               // A listed NFT sits in the marketplace escrow —
               // the listings match restores its price + seller
-              const listing = listingsData?.listings?.find(
+              const listing = listings.find(
                 (item) =>
                   item.nftAddress === nft.nftAddress &&
                   item.tokenId === nft.tokenId
@@ -122,6 +133,7 @@ export default function MyNftsPage() {
                   tokenId={nft.tokenId}
                   price={listing?.price}
                   seller={listing?.seller}
+                  priceUnknown={Boolean(listingsError)}
                 />
               );
             })}

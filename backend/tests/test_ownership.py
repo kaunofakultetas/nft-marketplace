@@ -9,8 +9,11 @@
 #  is two tokens — and addresses compare whatever their case.
 #  The answers are cached per wallet for a minute; a failed
 #  refresh serves the stale answer, and only a wallet never
-#  seen before lets the failure through. Time is mocked — no
-#  sleeping in tests.
+#  seen before lets the failure through. A wallet nobody asks
+#  for in five minutes is forgotten — every ask restarts that
+#  clock, so one still being looked at keeps its stale answer
+#  through a long outage. Time is mocked — no sleeping in
+#  tests.
 ############################################################
 
 
@@ -20,7 +23,7 @@ from unittest import mock
 
 from tests import helpers
 
-from app.marketplace.ownership import WalletHoldings, REFRESH_SECONDS
+from app.marketplace.ownership import WalletHoldings, REFRESH_SECONDS, FORGET_SECONDS
 
 
 def transfer(token_id, sender, recipient, block, nft=helpers.PUGS):
@@ -184,6 +187,31 @@ class CacheTests(HoldingsTestCase):
         for thread in threads:
             thread.join()
         self.assertEqual(answers, [[{'nftAddress': helpers.PUGS, 'tokenId': '1'}]] * 2)
+
+    def test_wallets_not_asked_for_in_a_while_are_forgotten(self):
+        # Any string in the path is a wallet to the cache
+        holdings = self.holdings({})
+        for i in range(1000):
+            holdings.get_nfts(f'0x{i:040x}')
+        self.now += 10 * REFRESH_SECONDS
+        holdings.get_nfts(helpers.STUDENT)
+        self.assertEqual(list(holdings._cache), [helpers.STUDENT])
+
+    def test_a_wallet_still_asked_for_keeps_its_holdings_through_a_long_outage(self):
+        holdings = self.holdings({helpers.STUDENT: [transfer(1, helpers.ZERO_ADDRESS, helpers.STUDENT, 100)]})
+        known = holdings.get_nfts(helpers.STUDENT)
+        self.etherscan.fail('token_nft_transfers', RuntimeError('Etherscan tokennfttx error: Max rate limit reached'))
+        for _ in range(3 * FORGET_SECONDS // REFRESH_SECONDS):
+            self.now += REFRESH_SECONDS
+            self.assertEqual(holdings.get_nfts(helpers.STUDENT), known)
+
+    def test_a_forgotten_wallet_lets_the_failure_through(self):
+        holdings = self.holdings({helpers.STUDENT: [transfer(1, helpers.ZERO_ADDRESS, helpers.STUDENT, 100)]})
+        holdings.get_nfts(helpers.STUDENT)
+        self.now += FORGET_SECONDS
+        self.etherscan.fail('token_nft_transfers', RuntimeError('Etherscan tokennfttx error: Max rate limit reached'))
+        with self.assertRaises(RuntimeError):
+            holdings.get_nfts(helpers.STUDENT)
 
 
 if __name__ == '__main__':

@@ -6,8 +6,12 @@
 #
 #    plumbing — every call goes to the V2 endpoint with
 #               Sepolia's chain id and the key, under a 30 s
-#               timeout; an HTTP error status and a transport
-#               failure reach the caller as they are
+#               timeout; an HTTP error status, a transport
+#               failure, a timeout and an answer that is no
+#               JSON reach the caller as a RuntimeError saying
+#               which — never with the request's URL, whose
+#               query string carries the key, not even in the
+#               traceback
 #    chain    — the tip from the proxy's hex (a bare '0x' is
 #               zero); the deployment block and time from the
 #               creation lookup's DECIMAL strings, whichever
@@ -24,6 +28,7 @@
 ############################################################
 
 
+import traceback
 import unittest
 from unittest import mock
 
@@ -36,6 +41,11 @@ from app.marketplace.etherscan import EtherscanClient, hex_int
 
 def log_at(block):
     return helpers.make_log('Listed', helpers.PUGS, 0, helpers.SELLER, block, price=1)
+
+
+def told(error):
+    # Everything a log line would show of the error
+    return ''.join(traceback.format_exception(error))
 
 
 
@@ -91,15 +101,35 @@ class PlumbingTests(ClientTestCase):
         self.assertEqual(call['params']['apikey'], helpers.TEST_ETHERSCAN_KEY)
         self.assertEqual(call['timeout'], 30)
 
-    def test_an_http_error_status_reaches_the_caller(self):
+    def test_an_http_error_status_is_told_without_the_url(self):
         client = self.answer(helpers.etherscan_response({'message': 'Forbidden'}, status=403))
-        with self.assertRaises(requests.HTTPError):
+        with self.assertRaises(RuntimeError) as failed:
             client.block_number()
+        self.assertEqual(str(failed.exception), 'Etherscan answered HTTP 403')
+        self.assertNotIn(helpers.TEST_ETHERSCAN_KEY, told(failed.exception))
 
-    def test_a_transport_failure_reaches_the_caller(self):
-        client = self.answer(requests.ConnectionError('connection reset'))
-        with self.assertRaises(requests.ConnectionError):
+    def test_an_outage_is_told_without_the_url(self):
+        # requests' own words for an unreachable host: the whole
+        # address, query string and key included
+        with helpers.no_dns(), self.assertRaises(RuntimeError) as failed:
+            EtherscanClient().block_number()
+        self.assertEqual(str(failed.exception), 'Etherscan could not be reached')
+        self.assertNotIn(helpers.TEST_ETHERSCAN_KEY, told(failed.exception))
+
+    def test_a_timeout_is_told_as_one(self):
+        client = self.answer(requests.ConnectTimeout('connect timed out'))
+        with self.assertRaises(RuntimeError) as failed:
             client.block_number()
+        self.assertEqual(str(failed.exception), 'Etherscan did not answer in time')
+
+    def test_an_answer_that_is_no_json_is_told_as_one(self):
+        page = requests.Response()
+        page.status_code = 200
+        page._content = b'<html>Bad Gateway</html>'
+        client = self.answer(page)
+        with self.assertRaises(RuntimeError) as failed:
+            client.block_number()
+        self.assertEqual(str(failed.exception), 'Etherscan answered something that is not JSON')
 
     def test_hex_int_reads_etherscans_bare_zero(self):
         self.assertEqual(hex_int('0x'), 0)

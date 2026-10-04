@@ -17,12 +17,13 @@
 #  derived marketplace state and backfills the new contract
 #  from scratch (reset_if_contract_changed — the pinned-file
 #  archive deliberately survives, spanning every contract
-#  generation). Every
-#  incremental scan re-fetches a small overlap BELOW the
-#  resume point so a testnet reorg near the tip cannot leave
-#  a stale event behind — re-storing is harmless because
-#  events are UNIQUE(TxHash, LogIndex) and the listing
-#  replay is ordered and idempotent.
+#  generation). Every incremental scan re-fetches a small
+#  overlap BELOW the resume point, and what the chain holds
+#  for that window now REPLACES what was stored for it: an
+#  event a testnet reorg dropped near the tip is dropped
+#  here too, a transaction mined again elsewhere is stored
+#  once, at its new place, and every token the window
+#  touched has its listing re-derived from its latest event.
 #
 #  Used by:
 #    - main.py — one instance, started at startup (STEP 3)
@@ -51,8 +52,8 @@ TOPIC_ITEM_CANCELED = EVENT_TOPICS['Canceled']['topic0']
 
 # How many blocks an incremental scan re-fetches BELOW the
 # stored resume point — a small overlap so a reorg near the
-# tip can't leave a stale event behind (storage dedupes, the
-# ordered replay converges either way)
+# tip can't leave a stale event behind (the fetched window
+# replaces what was stored for it)
 REORG_OVERLAP_BLOCKS = 10
 
 
@@ -71,11 +72,11 @@ REORG_OVERLAP_BLOCKS = 10
 # database was built for (Indexer_State 'ContractAddress',
 # lowercase). On a mismatch — including a database from
 # before this key existed — the DERIVED marketplace state
-# (events, active listings, scan position) is wiped in ONE
-# transaction and the address recorded, so the daemons then
-# backfill the new contract from its deployment block. A
-# crash mid-reset simply re-triggers the reset on the next
-# boot.
+# (events, active listings, the scan position and when it
+# was reached) is wiped in ONE transaction and the address
+# recorded, so the daemons then backfill the new contract
+# from its deployment block. A crash mid-reset simply
+# re-triggers the reset on the next boot.
 #
 # Pinned_Files and the kubo pins are deliberately NOT
 # touched: the archive spans every contract generation —
@@ -99,7 +100,7 @@ def reset_if_contract_changed():
 
         conn.execute('DELETE FROM Marketplace_Events')
         conn.execute('DELETE FROM Marketplace_ActiveListings')
-        conn.execute("DELETE FROM Indexer_State WHERE Key = 'LastScannedBlock'")
+        conn.execute("DELETE FROM Indexer_State WHERE Key IN ('LastScannedBlock', 'LastScannedAt')")
         conn.execute('''
             INSERT OR REPLACE INTO Indexer_State (Key, Value)
             VALUES ('ContractAddress', ?)
@@ -186,8 +187,8 @@ def _decode_log(log):
 # One instance owns the whole sync. Methods in groups:
 #
 #   setup — __init__, start
-#   scan  — _loop
-#   store — _store_logs
+#   scan  — _loop, _resume_point
+#   store — _store_logs, _relist
 #
 # Used by:
 #   - main.py — MarketplaceIndexer(EtherscanClient()).start()
@@ -252,16 +253,12 @@ class MarketplaceIndexer:
     ############################################################
 
     def _loop(self):
-
-        # STEP 1: the stored resume point — None on a fresh database,
-        # resolved from the chain in the loop below (an Etherscan
-        # hiccup at boot must retry, never kill the thread).
-        # =============================================================
-        with get_db_connection() as conn:
-            row = conn.execute(
-                "SELECT Value FROM Indexer_State WHERE Key = 'LastScannedBlock'"
-            ).fetchone()
-        last_scanned = int(row['Value']) if row else None
+        # STEP 1: no resume point yet — the first round reads it, INSIDE
+        # the retry loop: a database busy at boot (dbgate holding a
+        # write) or an Etherscan hiccup must retry, never kill the
+        # thread.
+        # ==============================================================
+        last_scanned = None
 
 
         # STEP 2: the scan loop — each fetch starts a small overlap
@@ -270,17 +267,15 @@ class MarketplaceIndexer:
         # ============================================================
         while True:
             try:
-                # First run: the deployment block IS the start block
                 if last_scanned is None:
-                    last_scanned = self.etherscan.contract_creation(NFT_MARKETPLACE_ADDRESS)['block'] - 1
-                    print(f'[indexer] contract deployed at block {last_scanned + 1} — backfilling from there', flush=True)
+                    last_scanned = self._resume_point()
 
                 latest_block = self.etherscan.block_number()
 
                 if last_scanned < latest_block:
                     from_block = max(0, last_scanned + 1 - REORG_OVERLAP_BLOCKS)
                     raw_logs = self.etherscan.get_logs(NFT_MARKETPLACE_ADDRESS, from_block)
-                    stored = self._store_logs(raw_logs, latest_block)
+                    stored = self._store_logs(raw_logs, from_block, latest_block)
                     if stored > 0:
                         print(f'[indexer] stored {stored} events, scanned to block {latest_block}', flush=True)
                     last_scanned = latest_block
@@ -297,24 +292,61 @@ class MarketplaceIndexer:
 
 
     ############################################################
+    # _resume_point
+    ############################################################
+    #
+    # The last block already scanned: LastScannedBlock when the
+    # database has one, otherwise the block before the
+    # contract's deployment, looked up live — the first scan
+    # then starts at the deployment block itself.
+    #
+    # Used by:
+    #   - _loop (above) — until it has a resume point
+    ############################################################
+
+    def _resume_point(self):
+        with get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT Value FROM Indexer_State WHERE Key = 'LastScannedBlock'"
+            ).fetchone()
+        if row:
+            return int(row['Value'])
+
+        deployed_in = self.etherscan.contract_creation(NFT_MARKETPLACE_ADDRESS)['block']
+        print(f'[indexer] contract deployed at block {deployed_in} — backfilling from there', flush=True)
+        return deployed_in - 1
+
+
+
+
+
+
+    ############################################################
     # _store_logs
     ############################################################
     #
-    # Decodes and stores a batch of raw logs, replaying them
-    # into Marketplace_ActiveListings in (block, logIndex)
-    # order — Listed upserts (updateListing re-emits
-    # ItemListed, so REPLACE also covers price changes),
-    # Bought/Canceled deletes. LastScannedBlock advances in
-    # the same transaction: a crash never leaves a
-    # half-applied batch marked as done. Returns how many
-    # events the batch held (dupes from the reorg overlap
-    # included — they are ignored by the UNIQUE constraint).
+    # Stores one scan window — every log of the contract from
+    # from_block to the tip, as the chain holds them NOW — and
+    # brings Marketplace_ActiveListings in line with it, all in
+    # ONE transaction together with the new LastScannedBlock:
+    # a crash never leaves a half-applied window marked as
+    # done. Returns how many events the window held (the
+    # re-read overlap included).
+    #
+    # The window replaces what was stored for it, re-inserted
+    # in chain order — the feed lists events by row id, so the
+    # ids must keep following the chain. A transaction that
+    # turns up in another block than the one stored was mined
+    # again after a reorg: its old rows go, however far below
+    # the window they sit. Etherscan's pages overlap by a block
+    # (see etherscan.py) — the UNIQUE(TxHash, LogIndex)
+    # constraint ignores the repeat.
     #
     # Used by:
     #   - _loop (above)
     ############################################################
 
-    def _store_logs(self, raw_logs, scanned_to_block):
+    def _store_logs(self, raw_logs, from_block, scanned_to_block):
         events = [event for event in (_decode_log(log) for log in raw_logs) if event]
         events.sort(key=lambda event: (event['BlockNumber'], event['LogIndex']))
 
@@ -326,26 +358,40 @@ class MarketplaceIndexer:
             print(f'[indexer] warning: {unknown} logs skipped — event signatures do not match the known ABI', flush=True)
 
         with get_db_connection() as conn:
+            # STEP 1: the window as stored goes — its tokens noted, a
+            # dropped event may have been the one that listed them
+            # =======================================================
+            touched = {(row['NftAddress'], row['TokenId']) for row in conn.execute(
+                'SELECT NftAddress, TokenId FROM Marketplace_Events WHERE BlockNumber >= ?', (from_block,)
+            )}
+            conn.execute('DELETE FROM Marketplace_Events WHERE BlockNumber >= ?', (from_block,))
+
+
+            # STEP 2: the window as the chain holds it now, in chain
+            # order — each transaction's rows from another block first
+            # removed, it was mined again
+            # ========================================================
             for event in events:
+                touched.update((row['NftAddress'], row['TokenId']) for row in conn.execute(
+                    'SELECT NftAddress, TokenId FROM Marketplace_Events WHERE TxHash = ? AND BlockNumber != ?',
+                    (event['TxHash'], event['BlockNumber'])
+                ))
+                conn.execute('DELETE FROM Marketplace_Events WHERE TxHash = ? AND BlockNumber != ?',
+                             (event['TxHash'], event['BlockNumber']))
                 conn.execute('''
                     INSERT OR IGNORE INTO Marketplace_Events
                         (BlockNumber, Timestamp, TxHash, LogIndex, EventType, NftAddress, TokenId, Seller, Buyer, Price)
                     VALUES
                         (:BlockNumber, :Timestamp, :TxHash, :LogIndex, :EventType, :NftAddress, :TokenId, :Seller, :Buyer, :Price)
                 ''', event)
+                touched.add((event['NftAddress'], event['TokenId']))
 
-                if event['EventType'] in ('Listed', 'Updated'):
-                    conn.execute('''
-                        INSERT OR REPLACE INTO Marketplace_ActiveListings
-                            (NftAddress, TokenId, Seller, Price, ListedBlock)
-                        VALUES
-                            (:NftAddress, :TokenId, :Seller, :Price, :BlockNumber)
-                    ''', event)
-                else:
-                    conn.execute('''
-                        DELETE FROM Marketplace_ActiveListings
-                        WHERE NftAddress = :NftAddress AND TokenId = :TokenId
-                    ''', event)
+
+            # STEP 3: every touched token's listing re-derived, then the
+            # scan position and its time
+            # ==========================================================
+            for nft_address, token_id in sorted(touched):
+                self._relist(conn, nft_address, token_id)
 
             conn.execute('''
                 INSERT OR REPLACE INTO Indexer_State (Key, Value)
@@ -359,3 +405,44 @@ class MarketplaceIndexer:
             ''', (str(int(time.time())),))
 
         return len(events)
+
+
+
+
+
+
+    ############################################################
+    # _relist
+    ############################################################
+    #
+    # One token's row in Marketplace_ActiveListings, re-derived
+    # from its LATEST stored event: a listing or a price update
+    # puts it on sale by that event's seller, at that price and
+    # block — updateListing re-announces the whole listing, so
+    # no earlier event is needed — while a sale, a cancellation
+    # or no event at all takes it off the market. The same end
+    # state a replay of the token's whole history reaches.
+    #
+    # Used by:
+    #   - _store_logs (above) — inside its transaction
+    ############################################################
+
+    def _relist(self, conn, nft_address, token_id):
+        latest = conn.execute('''
+            SELECT EventType, Seller, Price, BlockNumber FROM Marketplace_Events
+            WHERE NftAddress = ? AND TokenId = ?
+            ORDER BY BlockNumber DESC, LogIndex DESC LIMIT 1
+        ''', (nft_address, token_id)).fetchone()
+
+        if latest and latest['EventType'] in ('Listed', 'Updated'):
+            conn.execute('''
+                INSERT OR REPLACE INTO Marketplace_ActiveListings
+                    (NftAddress, TokenId, Seller, Price, ListedBlock)
+                VALUES
+                    (?, ?, ?, ?, ?)
+            ''', (nft_address, token_id, latest['Seller'], latest['Price'], latest['BlockNumber']))
+        else:
+            conn.execute('''
+                DELETE FROM Marketplace_ActiveListings
+                WHERE NftAddress = ? AND TokenId = ?
+            ''', (nft_address, token_id))

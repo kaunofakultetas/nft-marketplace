@@ -11,9 +11,11 @@
 //    - /history                 — the marketplace activity feed
 //    - /about                   — this instance, technically
 //    - /nft/:nftAddress/:tokenId — single NFT detail + actions
+//    - anything else            — "Page not found"
 //
-//  Every page requires a connected wallet and renders its own
-//  "connect first" placeholder when there is none.
+//  Every marketplace page requires a connected wallet and
+//  renders its own "connect first" placeholder when there is
+//  none.
 //
 //  Used by:
 //    - main.jsx — mounted into #root inside the provider stack
@@ -32,6 +34,7 @@ import SellNftPage from '@/pages/SellNft/Page';
 import HistoryPage from '@/pages/History/Page';
 import NftDetailPage from '@/pages/NftDetail/Page';
 import AboutPage from '@/pages/About/Page';
+import NotFoundPage from '@/pages/NotFound/Page';
 
 
 
@@ -91,6 +94,7 @@ export default function App() {
             <Route path="history" element={<HistoryPage />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="nft/:nftAddress/:tokenId" element={<NftDetailPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </main>
 

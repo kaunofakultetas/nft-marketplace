@@ -16,9 +16,8 @@
 
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
-import { ethers } from 'ethers';
 import { useNftMetadata } from '@/hooks/useNftMetadata';
-import { truncateAddress } from '@/utils/format';
+import { truncateAddress, formatEth } from '@/utils/format';
 
 
 
@@ -32,14 +31,19 @@ import { truncateAddress } from '@/utils/format';
 //
 // Props: price (wei string, undefined when not listed),
 //        nftAddress, tokenId, seller (undefined when the
-//        wallet owns the NFT but hasn't listed it)
+//        wallet owns the NFT but hasn't listed it), and
+//        priceUnknown — set when the listings could not be
+//        read, so whether the token is for sale is not known.
+//        A price that cannot be read, or one that is not
+//        known, reads "Price unknown" — never "Not for sale",
+//        which would be a claim.
 //
 // Used by:
 //   - pages/Home   — the "NFTs For Sale" grid
 //   - pages/MyNfts — the wallet's NFT grid
 // -----------------------------------------------------------
 
-export default function NFTBox({ price, nftAddress, tokenId, seller }) {
+export default function NFTBox({ price, nftAddress, tokenId, seller, priceUnknown = false }) {
 
   const { metadata, problem, loading } = useNftMetadata(nftAddress, tokenId);
   const { address: userAddress } = useAccount();
@@ -95,9 +99,11 @@ export default function NFTBox({ price, nftAddress, tokenId, seller }) {
           {metadata.name || <span className="text-gray-400 italic">No name</span>}
         </h3>
 
-        {price ? (
+        {priceUnknown || (price && !formatEth(price)) ? (
+          <div className="text-sm text-gray-400">Price unknown</div>
+        ) : price ? (
           <div className="text-lg font-bold text-[var(--color-primary)]">
-            {ethers.formatUnits(price, 'ether')} ETH
+            {formatEth(price)} ETH
           </div>
         ) : (
           <div className="text-sm text-gray-400">Not for sale</div>

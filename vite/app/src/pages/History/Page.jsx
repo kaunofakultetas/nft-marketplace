@@ -7,7 +7,10 @@
 //  itself (thumbnail + name, linking to the detail page),
 //  price, actor, block time and — technical on purpose —
 //  the block number and the transaction on Etherscan.
-//  Filter chips narrow the feed client-side.
+//  Filter chips narrow the feed client-side. A failed read
+//  says what went wrong — never "No activity yet", which
+//  would claim an empty marketplace — and so does a filter
+//  that matches nothing in a feed that has events.
 //
 //  Split into (root component last):
 //
@@ -19,10 +22,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
-import { ethers } from 'ethers';
 import { Link } from 'react-router-dom';
 import { apiGet } from '@/utils/api';
-import { truncateAddress, etherscanTxUrl, formatDateTime } from '@/utils/format';
+import { truncateAddress, etherscanTxUrl, formatDateTime, formatEth } from '@/utils/format';
 import NftThumb from '@/components/NftThumb';
 import ConnectPrompt from '@/components/ConnectPrompt';
 
@@ -30,12 +32,15 @@ import ConnectPrompt from '@/components/ConnectPrompt';
 // One colour per event type — same palette as the detail
 // page's history stripes. 'Updated' is the indexer's replay
 // classification of updateListing's re-emitted ItemListed.
+// A type the feed does not know keeps its own name on a
+// neutral chip.
 const EVENT_STYLES = {
   Listed: 'bg-blue-100 text-blue-800',
   Updated: 'bg-violet-100 text-violet-800',
   Bought: 'bg-green-100 text-green-800',
   Canceled: 'bg-gray-200 text-gray-600',
 };
+const UNKNOWN_EVENT_STYLE = 'bg-gray-100 text-gray-500';
 
 // 'Bought' reads as "Sold" in a marketplace feed
 const EVENT_LABELS = {
@@ -96,7 +101,9 @@ function FilterChips({ active, onPick }) {
 //
 // One event: chip, the NFT itself, price, actor (seller on
 // Listed/Canceled, buyer on Sold), the exact block datetime
-// (YYYY-MM-DD HH:MM:SS), block and tx link.
+// (YYYY-MM-DD HH:MM:SS), block and tx link. A price that
+// cannot be read is a dash like no price at all, and an
+// event without a transaction hash has no link to follow.
 //
 // Used by:
 //   - HistoryPage (below)
@@ -107,20 +114,21 @@ function ActivityRow({ event }) {
   // Bought events carry BOTH parties — the acting party is
   // the buyer there, the seller everywhere else
   const actor = event.type === 'Bought' ? event.buyer : event.seller;
+  const price = formatEth(event.price);
 
 
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-4 py-3">
-        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${EVENT_STYLES[event.type]}`}>
-          {EVENT_LABELS[event.type]}
+        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${EVENT_STYLES[event.type] ?? UNKNOWN_EVENT_STYLE}`}>
+          {EVENT_LABELS[event.type] ?? String(event.type)}
         </span>
       </td>
       <td className="px-4 py-3">
         <NftThumb nftAddress={event.nftAddress} tokenId={event.tokenId} />
       </td>
       <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">
-        {event.price ? `${ethers.formatUnits(event.price, 'ether')} ETH` : '—'}
+        {price ? `${price} ETH` : '—'}
       </td>
       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
         <span className="font-mono" title={actor}>{truncateAddress(actor)}</span>
@@ -132,15 +140,17 @@ function ActivityRow({ event }) {
         {event.blockNumber}
       </td>
       <td className="px-4 py-3 whitespace-nowrap text-sm">
-        <a
-          href={etherscanTxUrl(event.txHash)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] underline"
-          title={event.txHash}
-        >
-          {event.txHash.slice(0, 10)}... ↗
-        </a>
+        {typeof event.txHash === 'string' && event.txHash ? (
+          <a
+            href={etherscanTxUrl(event.txHash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] underline"
+            title={event.txHash}
+          >
+            {event.txHash.slice(0, 10)}... ↗
+          </a>
+        ) : '—'}
       </td>
     </tr>
   );
@@ -165,13 +175,14 @@ export default function HistoryPage() {
   const { isConnected } = useAccount();
   const [filter, setFilter] = useState('All');
 
-  const { isLoading, data } = useQuery({
+  const { isLoading, data, error } = useQuery({
     queryKey: ['activity'],
     queryFn: () => apiGet('/api/activity?limit=100'),
   });
 
 
-  const events = (data?.activity || []).filter(
+  const feed = Array.isArray(data?.activity) ? data.activity : [];
+  const events = feed.filter(
     (event) => filter === 'All' || event.type === filter
   );
 
@@ -192,11 +203,15 @@ export default function HistoryPage() {
         <FilterChips active={filter} onPick={setFilter} />
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <p className="text-red-800">Error: {error.message}</p>
+        </div>
+      ) : isLoading ? (
         <div className="text-gray-500">Loading...</div>
       ) : events.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-xl p-14 text-center text-gray-500">
-          No activity yet
+          {feed.length === 0 ? 'No activity yet' : `No “${EVENT_LABELS[filter]}” events in the feed`}
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-x-auto">

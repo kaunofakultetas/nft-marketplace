@@ -62,8 +62,8 @@ describe('apiGet — successful answers', () => {
 describe('apiGet — failures', () => {
 
   it('throws the backend\'s own sentence when the failure carries one', async () => {
-    given.error('get', '/api/my-nfts/:wallet', 'Etherscan request failed: 503 Server Error', 502);
-    await expect(apiGet(`/api/my-nfts/${f.STUDENT}`)).rejects.toThrow(new Error('Etherscan request failed: 503 Server Error'));
+    given.error('get', '/api/my-nfts/:wallet', 'Etherscan request failed: Etherscan answered HTTP 503', 502);
+    await expect(apiGet(`/api/my-nfts/${f.STUDENT}`)).rejects.toThrow(new Error('Etherscan request failed: Etherscan answered HTTP 503'));
   });
 
 

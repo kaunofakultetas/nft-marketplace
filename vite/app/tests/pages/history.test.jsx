@@ -12,21 +12,20 @@
 //  otherwise — short with the full address on hover, the block
 //  time in the student's own zone, the block, and the
 //  transaction linked on Etherscan in a new tab. Filter chips
-//  narrow the feed in the browser. And the backend contract
-//  matrix of /api/activity.
-//
-//  Pinned: a failed read is presented as an empty marketplace
-//  ("No activity yet"), and so is a filter that matches
-//  nothing; an event without a transaction hash, with an
-//  actor that is no string or with a price that is no number
-//  crashes the page.
+//  narrow the feed in the browser — a filter that matches
+//  nothing says so, never "No activity yet". And the backend
+//  contract matrix of /api/activity: a failed read shown as
+//  "Error: <the message>", never as an empty marketplace; an
+//  event without a transaction hash, with an actor that is no
+//  text or a price that is no number, shown without crashing
+//  the page.
 // -----------------------------------------------------------
 
 import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { renderPage } from '../support/render';
 import { given, url } from '../support/backend/server';
-import { describeEndpointContract, settle, variantNames } from '../support/backend/contract';
+import { describeEndpointContract, settle } from '../support/backend/contract';
 import { LocationProbe, currentPath } from '../support/shell/router';
 import * as f from '../support/backend/fixtures';
 import { installMetamask } from '../support/wallets/metamask';
@@ -263,12 +262,22 @@ describe('Filtering', () => {
   });
 
 
-  it.fails('says the filter matches nothing — PINNED KNOWN BUG: an empty filter says "No activity yet", as if the marketplace had none', async () => {
+  it('says the filter matches nothing — not that the marketplace has no activity', async () => {
     given.json('get', '/api/activity', { activity: f.activity().activity.filter((event) => event.type !== 'Bought') });
     const { user } = renderHistory();
     await feedLoaded(8);
     await user.click(chip('Sold'));
+    expect(screen.getByText('No “Sold” events in the feed')).toBeInTheDocument();
     expect(screen.queryByText(EMPTY)).toBeNull();
+  });
+
+
+  it('shows an event type it does not know under its own name, and a row without a transaction a dash', async () => {
+    given.json('get', '/api/activity', { activity: [{ ...f.activity().activity[0], type: 'Transferred', txHash: null }] });
+    renderHistory();
+    await feedLoaded(1);
+    expect(feed()[0][0]).toBe('Transferred');
+    expect(rows()[0][6]).toHaveTextContent(/^—$/);
   });
 });
 
@@ -282,12 +291,9 @@ describe('Filtering', () => {
 // Backend contract
 // -----------------------------------------------------------
 //
-// The page has no failure presentation of its own: a failed
-// read must at least not pass for an empty marketplace — it
-// does (pinned).
+// A failed read is "Error: <the message>" where the feed would
+// be — never an empty marketplace.
 // -----------------------------------------------------------
-
-const EMPTY_MARKETPLACE = 'a failed read is shown as an empty marketplace — "No activity yet"';
 
 describeEndpointContract({
   path: '/api/activity',
@@ -299,13 +305,7 @@ describeEndpointContract({
     await heading();
     await settle(100);
     expect(screen.queryByText(EMPTY)).toBeNull();
-    expect(await screen.findByText(message, { exact: false }, { timeout: 1500 })).toBeInTheDocument();
+    expect(await screen.findByText(`Error: ${message}`)).toBeInTheDocument();
   },
   loading: () => screen.getByText('Loading...'),
-  pins: {
-    ...Object.fromEntries(variantNames('failed').map((name) => [name, EMPTY_MARKETPLACE])),
-    'every leaf null → page survives': 'an event without a transaction hash crashes the page — txHash.slice on null',
-    'types swapped (numbers as strings, strings as numbers) → page survives': 'an actor that is no string crashes the page — truncateAddress slices a number',
-    'hostile strings (unicode + markup) → rendered as text, never as elements': 'a price that is no number crashes the page — ethers.formatUnits throws while rendering',
-  },
 });

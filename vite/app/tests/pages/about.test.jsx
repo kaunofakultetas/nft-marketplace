@@ -11,12 +11,10 @@
 //  pin status with its count and what it means; and the
 //  contract's interface — its functions with a note each, and
 //  its events with the signature and the real keccak-256 topic
-//  hash as the backend sends them. And the backend contract
-//  matrix of /api/stats.
-//
-//  Pinned: the page says the indexer reads "these three"
-//  events above a list of four; stats of the wrong shape crash
-//  the page.
+//  hash as the backend sends them, introduced without a count
+//  the list could contradict. And the backend contract matrix
+//  of /api/stats — stats of any shape leave the page standing,
+//  a volume it cannot read a dash.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
@@ -283,10 +281,18 @@ describe('The contract interface', () => {
   });
 
 
-  it.fails('counts the events it lists — PINNED KNOWN BUG: the page says the indexer reads "these three" above a list of four', async () => {
+  it('introduces the events without a count the list could contradict', async () => {
     renderAbout();
     await factsLoaded();
-    expect(screen.getByText(/just by reading these/)).not.toHaveTextContent('these three');
+    expect(screen.getByText(/just by reading these/)).toHaveTextContent('just by reading these events');
+  });
+
+
+  it('shows a dash for a volume it cannot read', async () => {
+    given.json('get', '/api/stats', { ...f.stats(), totalVolumeWei: null });
+    renderAbout();
+    await factsLoaded();
+    expect(fact('Lifetime sales')).toHaveTextContent(`${f.stats().totalSales} (— ETH volume)`);
   });
 });
 
@@ -304,8 +310,6 @@ describe('The contract interface', () => {
 // of saying it does not know.
 // -----------------------------------------------------------
 
-const NO_VOLUME = 'stats without a volume crash the page — ethers.formatUnits(undefined) throws while rendering';
-
 describeEndpointContract({
   path: '/api/stats',
   fixture: f.stats(),
@@ -317,12 +321,4 @@ describeEndpointContract({
     expect(fact('Network')).toHaveTextContent(/^…$/);
   },
   loading: () => fact('Network').textContent === '…',
-  pins: {
-    'a JSON string → page survives': NO_VOLUME,
-    'a JSON number → page survives': NO_VOLUME,
-    'wrong container (object for a list, list for an object) → page survives': NO_VOLUME,
-    'every field missing → page survives': NO_VOLUME,
-    'every leaf null → page survives': 'a null volume crashes the page — ethers.formatUnits(null) throws while rendering',
-    'hostile strings (unicode + markup) → rendered as text, never as elements': 'a volume that is no number crashes the page — ethers.formatUnits throws while rendering',
-  },
 });

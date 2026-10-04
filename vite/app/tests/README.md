@@ -114,11 +114,10 @@ What the suite learned the hard way:
   concurrent reads AND the wallet's balance (Multicall3's `getEthBalance`)
   arrive as one `eth_call` to Multicall3's `aggregate3`. `sepolia.readsOf(name)`
   lists each read with `via`.
-- **ethers.** It batches what it sends within 10 ms (a batch is answered
-  with a batch), retries a dead relay's network detection every second for
-  ever, and polls for a held transaction every 4 s — a test that holds
-  mining waits up to that long. `waitForTransaction` can leak a rejection
-  over a dead relay: `catchUnhandledRejections()` takes it for that test.
+- **Receipts.** A page waits for its transaction's receipt through the
+  relay, asking every 2 s (`utils/chain.js`) — a test that holds mining
+  waits up to that long after `sepolia.mine()`. A relay that fails ends the
+  wait at once, after viem's own retries (about a second).
 - **Toasts.** react-hot-toast keeps a module-level store (cleared after each
   test). `renderPage`'s outlet has the library's own durations, `renderApp`'s
   is App.jsx's (10 s, errors 15 s). A dismissed toast leaves on a timer set

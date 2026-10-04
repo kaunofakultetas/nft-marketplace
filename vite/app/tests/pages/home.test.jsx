@@ -9,21 +9,20 @@
 //  the backend's order (newest listing first), sortable by
 //  price with wei compared as big integers, "Loading..." while
 //  the listings load, an empty marketplace's nudge towards
-//  /sell-nft, and every card opening its NFT. And the backend
-//  contract matrices of /api/listings and /api/stats.
-//
-//  Pinned: a failed listings read is never said — the grid
-//  shows "Loading..." for ever; a listing or stats answer of
-//  the wrong shape crashes the page (no error boundary in
-//  App.jsx, so the student gets a blank page); the sort
-//  control has no name.
+//  /sell-nft, and every card opening its NFT; the sort control
+//  named for assistive tech, a price it cannot read sorted
+//  last. And the backend contract matrices of /api/listings —
+//  a failed read said as "Error: <the message>" where the grid
+//  would be — and /api/stats; an answer of the wrong shape
+//  never crashes the page (App.jsx has no error boundary: a
+//  crash would leave the student a blank page).
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { renderPage } from '../support/render';
 import { given } from '../support/backend/server';
-import { describeEndpointContract, settle, variantNames } from '../support/backend/contract';
+import { describeEndpointContract, settle } from '../support/backend/contract';
 import { LocationProbe, currentPath } from '../support/shell/router';
 import * as f from '../support/backend/fixtures';
 import { installMetamask } from '../support/wallets/metamask';
@@ -280,10 +279,26 @@ describe('Sorting', () => {
   });
 
 
-  it.fails('names the sort control for assistive tech — PINNED KNOWN BUG: the <select> has no label', async () => {
+  it('names the sort control for assistive tech', async () => {
     renderHome();
     await heading();
-    expect(screen.getByRole('combobox')).toHaveAccessibleName();
+    expect(screen.getByRole('combobox', { name: 'Sort the listings' })).toBeInTheDocument();
+  });
+
+
+  it('sorts a price it cannot read last, low to high and high to low alike', async () => {
+    given.json('get', '/api/listings', { listings: [
+      { nftAddress: f.PUGS, price: 'soon', seller: f.SELLER, tokenId: '0' },
+      { nftAddress: f.ART, price: f.wei('1.25'), seller: f.SELLER, tokenId: '0' },
+      { nftAddress: f.ART, price: f.wei('0.02'), seller: f.SELLER, tokenId: '1' },
+    ] });
+    const { user } = renderHome();
+    await screen.findByText('Vilnius at Dusk');
+    await screen.findByText('PUG');
+    await user.selectOptions(screen.getByRole('combobox'), 'price-low');
+    expect(cards()).toEqual([['NFT #1', '0.02 ETH'], ['Vilnius at Dusk', '1.25 ETH'], ['PUG', 'Price unknown']]);
+    await user.selectOptions(screen.getByRole('combobox'), 'price-high');
+    expect(cards()).toEqual([['Vilnius at Dusk', '1.25 ETH'], ['NFT #1', '0.02 ETH'], ['PUG', 'Price unknown']]);
   });
 });
 
@@ -298,13 +313,11 @@ describe('Sorting', () => {
 // -----------------------------------------------------------
 //
 // /api/listings feeds the grid, /api/stats the bar above it.
-// The grid has no failure presentation of its own: a failed
-// read must at least be said — it is not (pinned). The stats
-// bar simply stays away when its read fails, the grid below
-// unaffected — that is its way of failing.
+// A failed listings read is "Error: <the message>" where the
+// grid would be. The stats bar simply stays away when its
+// read fails, the grid below unaffected — that is its way of
+// failing.
 // -----------------------------------------------------------
-
-const NEVER_SAID = 'a failed read is never shown — the grid says "Loading..." for ever';
 
 describeEndpointContract({
   path: '/api/listings',
@@ -312,13 +325,11 @@ describeEndpointContract({
   render: () => renderHome(),
   chrome: () => screen.getByRole('heading', { level: 1, name: 'NFTs For Sale' }),
   loaded: () => gridLoaded(),
-  failed: async (message) => { await screen.findByText(message, { exact: false }, { timeout: 1500 }); },
-  loading: () => screen.getByText('Loading...'),
-  pins: {
-    ...Object.fromEntries(variantNames('failed').map((name) => [name, NEVER_SAID])),
-    'types swapped (numbers as strings, strings as numbers) → page survives': 'a seller that is no string crashes its card — truncateAddress slices a number',
-    'hostile strings (unicode + markup) → rendered as text, never as elements': 'a price that is no number crashes its card — ethers.formatUnits throws while rendering',
+  failed: async (message) => {
+    expect(await screen.findByText(`Error: ${message}`)).toBeInTheDocument();
+    expect(screen.queryByText('Loading...')).toBeNull();
   },
+  loading: () => screen.getByText('Loading...'),
 });
 
 
@@ -332,13 +343,5 @@ describeEndpointContract({
     await heading();
     await settle(100);
     expect(screen.queryByText('Floor Price')).toBeNull();
-  },
-  pins: {
-    'a JSON string → page survives': 'stats without a volume crash the page — ethers.formatUnits(undefined) throws while rendering',
-    'a JSON number → page survives': 'stats without a volume crash the page — ethers.formatUnits(undefined) throws while rendering',
-    'wrong container (object for a list, list for an object) → page survives': 'stats without a volume crash the page — ethers.formatUnits(undefined) throws while rendering',
-    'every field missing → page survives': 'stats without a volume crash the page — ethers.formatUnits(undefined) throws while rendering',
-    'every leaf null → page survives': 'a null volume crashes the page — ethers.formatUnits(null) throws while rendering',
-    'hostile strings (unicode + markup) → rendered as text, never as elements': 'a floor price that is no number crashes the page — ethers.formatUnits throws while rendering',
   },
 });

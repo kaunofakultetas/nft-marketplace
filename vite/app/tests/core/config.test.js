@@ -7,11 +7,13 @@
 //  down here: getConfig() refuses to answer before the load;
 //  the load keeps the marketplace address as given, resolves
 //  the relay's relative path against the page's own origin
-//  (ethers needs a full URL) and leaves an absolute one alone,
+//  (wagmi's transport is handed a full URL) and leaves an
+//  absolute one alone,
 //  defaults the gateway prefix and the IPFS deadline — and
 //  reads a deadline sent as text; it fails loudly, for
 //  main.jsx's "Backend unavailable" screen, on an error
-//  status, a body that is not JSON and a dropped connection.
+//  status, a body that is not JSON, a dropped connection and
+//  an answer without an RPC URL.
 //
 //  Every test loads a fresh copy of the module
 //  (vi.resetModules) — it keeps the config for the life of the
@@ -127,9 +129,12 @@ describe('what the load keeps', () => {
   });
 
 
-  it.fails('refuses a config without an RPC URL — PINNED KNOWN BUG: new URL(undefined) resolves to "<origin>/undefined", and every chain read goes there', async () => {
-    answer({ rpcUrl: undefined });
-    await expect(loadConfig()).rejects.toThrow();
+  it.each([
+    ['missing', undefined],
+    ['empty', ''],
+  ])('refuses a config whose RPC URL is %s, rather than send every chain read to a path on this origin', async (_, value) => {
+    answer({ rpcUrl: value });
+    await expect(loadConfig()).rejects.toThrow('GET /api/config answered without an rpcUrl');
   });
 });
 

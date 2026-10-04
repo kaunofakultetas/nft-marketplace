@@ -7,20 +7,18 @@
 //  gateway too. Pinned down here, through a probe component
 //  that shows what the hook hands back: the loading state; a
 //  healthy token (the course PUG, the student-made ART #0) —
-//  its name, description, gateway image and the "View JSON"
-//  URL; every DIAGNOSIS a wrongly minted token earns, each
+//  its name, description, attributes, gateway image and the
+//  "View JSON" URL; every DIAGNOSIS a wrongly minted token
+//  earns — an empty tokenURI (OpenZeppelin's default without
+//  a base URI) and JSON that is no object among them — each
 //  with the fallbacks it still shows (a placeholder image
 //  naming the token, the name and description the JSON did
-//  carry); a metadata file the gateway cannot deliver — gone,
-//  a dropped connection, the IPFS deadline passing; metadata
-//  on a plain web server, fetched where it lives; one read and
-//  one fetch per token however many components show it.
-//
-//  Pinned: the JSON's attributes never leave the hook; an
-//  empty tokenURI (OpenZeppelin's default without a base URI)
-//  and a metadata file holding JSON null leave the token
-//  loading for ever, undiagnosed; a relay that cannot be
-//  reached is blamed on the token, as a reverting tokenURI.
+//  carry, as text only); a metadata file the gateway cannot
+//  deliver — gone, a dropped connection, the IPFS deadline
+//  passing; metadata on a plain web server, fetched where it
+//  lives; one read and one fetch per token however many
+//  components show it; and a relay that cannot be reached
+//  never blamed on the token.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
@@ -31,7 +29,7 @@ import { server, given, url } from '../support/backend/server';
 import { withConfig } from '../support/setup';
 import { settle } from '../support/backend/contract';
 import { watchRequests } from '../support/shell/requests';
-import { DIAGNOSES, DIAGNOSED_TOKENS } from '../support/diagnoses';
+import { DIAGNOSES, DIAGNOSED_TOKENS, UNREADABLE } from '../support/diagnoses';
 import * as f from '../support/backend/fixtures';
 import { sepolia } from '../support/chain/sepolia';
 import { useNftMetadata } from '@/hooks/useNftMetadata';
@@ -100,10 +98,10 @@ describe('Healthy tokens', () => {
   });
 
 
-  it('hands back the course PUG — its name and description, its image and its JSON on the local gateway', async () => {
+  it('hands back the course PUG — its name, description and attributes, its image and its JSON on the local gateway', async () => {
     renderProbe([f.PUGS, '0']);
     expect(await settled(f.PUGS, '0')).toEqual({
-      metadata: { name: 'PUG', description: 'An adorable PUG pup!', image: f.PUG_IMAGE_URL },
+      metadata: { name: 'PUG', description: 'An adorable PUG pup!', image: f.PUG_IMAGE_URL, attributes: f.PUG_METADATA.attributes },
       problem: null,
       metadataURL: f.PUG_JSON_URL,
       loading: false,
@@ -114,7 +112,7 @@ describe('Healthy tokens', () => {
   it('moves an ipfs:// image inside the metadata onto the gateway as well', async () => {
     renderProbe([f.ART, '0']);
     const answer = await settled(f.ART, '0');
-    expect(answer.metadata).toEqual({ name: 'Vilnius at Dusk', description: f.ART_0_METADATA.description, image: `/ipfs/${f.ART_DIR}/0.png` });
+    expect(answer.metadata).toEqual({ name: 'Vilnius at Dusk', description: f.ART_0_METADATA.description, image: `/ipfs/${f.ART_DIR}/0.png`, attributes: f.ART_0_METADATA.attributes });
     expect(answer.metadataURL).toBe(`/ipfs/${f.ART_DIR}/0.json`);
   });
 
@@ -149,9 +147,17 @@ describe('Healthy tokens', () => {
   });
 
 
-  it.fails('hands back the JSON\'s attributes too — PINNED KNOWN BUG: only name, description and image leave the hook, so the detail page\'s Attributes panel never renders', async () => {
-    renderProbe([f.PUGS, '0']);
-    expect((await settled(f.PUGS, '0')).metadata.attributes).toEqual(f.PUG_METADATA.attributes);
+  it('leaves out attributes that are no list', async () => {
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, { ...f.ART_0_METADATA, attributes: { Palette: 'Amber' } });
+    renderProbe([f.ART, '0']);
+    expect((await settled(f.ART, '0')).metadata).not.toHaveProperty('attributes');
+  });
+
+
+  it('reads a name and description only as text — a number as itself, anything else as missing', async () => {
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, { name: { en: 'Vilnius at Dusk' }, description: 2026, image: `ipfs://${f.ART_DIR}/0.png` });
+    renderProbe([f.ART, '0']);
+    expect((await settled(f.ART, '0')).metadata).toEqual({ name: 'NFT #0', description: '2026', image: `/ipfs/${f.ART_DIR}/0.png` });
   });
 });
 
@@ -234,20 +240,40 @@ describe('Wrongly minted tokens', () => {
   });
 
 
-  it.fails('diagnoses an empty tokenURI — OpenZeppelin\'s default without a base URI — PINNED KNOWN BUG: the metadata query never starts, the token stays loading for ever', async () => {
+  it('diagnoses an empty tokenURI — OpenZeppelin\'s default without a base URI — without fetching anything', async () => {
+    const fetched = watchRequests('/ipfs/*');
     sepolia.setTokenURI(f.ART, '0', '');
     renderProbe([f.ART, '0']);
-    await settle(1500);
-    expect(probeOf(f.ART, '0').loading).toBe(false);
+    expect(await settled(f.ART, '0')).toEqual({
+      metadata: { name: 'NFT #0', description: '', image: PLACEHOLDER(0) },
+      problem: DIAGNOSES.emptyUri,
+      metadataURL: null,
+      loading: false,
+    });
+    expect(fetched).toEqual([]);
   });
 
 
-  it.fails('diagnoses a metadata file holding JSON null — PINNED KNOWN BUG: reading its name throws, the query fails and the token stays undiagnosed with no metadata', async () => {
-    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, null);
+  it.each([
+    ['null', null],
+    ['a list', ['Vilnius at Dusk', `ipfs://${f.ART_DIR}/0.png`]],
+    ['a text', 'Vilnius at Dusk'],
+    ['a number', 0],
+  ])('diagnoses a metadata file holding %s — JSON, but no object', async (_, body) => {
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, body);
     renderProbe([f.ART, '0']);
     const answer = await settled(f.ART, '0');
-    expect(answer.metadata).toBeDefined();
-    expect(answer.problem).not.toBeNull();
+    expect(answer.problem).toEqual(DIAGNOSES.notObject);
+    expect(answer.metadata).toEqual({ name: 'NFT #0', description: '', image: PLACEHOLDER(0) });
+  });
+
+
+  it('diagnoses an "image" that is no link — keeping the name and description', async () => {
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, { name: 'Vilnius at Dusk', description: 'Roofs', image: { uri: `ipfs://${f.ART_DIR}/0.png` } });
+    renderProbe([f.ART, '0']);
+    const answer = await settled(f.ART, '0');
+    expect(answer.problem).toEqual(DIAGNOSES.imageNotText);
+    expect(answer.metadata).toEqual({ name: 'Vilnius at Dusk', description: 'Roofs', image: PLACEHOLDER(0) });
   });
 });
 
@@ -293,10 +319,14 @@ describe('The metadata file cannot be delivered', () => {
 
 describe('The chain cannot be read', () => {
 
-  it.fails('does not blame the token when the RPC relay is down — PINNED KNOWN BUG: every token is diagnosed as "tokenURI() reverts on-chain"', async () => {
-    given.json('post', '/api/rpc', { error: 'RPC relay failed: Read timed out.' }, { status: 502 });
+  it('does not blame the token when the RPC relay is down — it says the chain cannot be read', async () => {
+    given.json('post', '/api/rpc', { error: 'RPC relay failed: the RPC provider could not be reached' }, { status: 502 });
     renderProbe([f.PUGS, '0']);
-    const answer = await settled(f.PUGS, '0');
-    expect(answer.problem?.message).not.toBe(DIAGNOSES.revert.message);
+    expect(await settled(f.PUGS, '0')).toEqual({
+      metadata: { name: 'NFT #0', description: '', image: PLACEHOLDER(0) },
+      problem: UNREADABLE,
+      metadataURL: null,
+      loading: false,
+    });
   });
 });

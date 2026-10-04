@@ -20,7 +20,7 @@
 #  Used by:
 #    - main.py — blueprint registration (STEP 2)
 #    - vite/app/src/pages/* — via utils/api.js
-#    - the browser's wagmi/ethers providers — /api/rpc
+#    - the browser's wagmi transport — /api/rpc
 ############################################################
 
 
@@ -30,6 +30,7 @@ from flask import Blueprint, jsonify, request, Response
 
 from app.database.db import get_db_connection
 from app.marketplace.etherscan import EtherscanClient
+from app.marketplace.failures import describe_request_failure
 from app.marketplace.ownership import WalletHoldings
 from main import SEPOLIA_RPC_URL, NFT_MARKETPLACE_ADDRESS, SEPOLIA_CHAIN_ID, EVENT_TOPICS
 
@@ -168,8 +169,10 @@ def get_listings():
 # every Listed/Bought/Canceled event with its actor, price,
 # block time, block number and tx hash. One list instead of
 # three: the GUI renders it as a real marketplace activity
-# feed and filters client-side. limit defaults to 100,
-# capped at 500.
+# feed and filters client-side. limit defaults to 100 and is
+# held between 0 and 500 — SQLite reads a negative LIMIT as
+# no limit at all, so a negative one must never reach the
+# query. A limit that is no whole number is a 400 saying so.
 #
 # Used by:
 #   - pages/History — the activity feed
@@ -177,7 +180,11 @@ def get_listings():
 
 @bp_marketplace.route('/api/activity', methods=['GET'])
 def get_activity():
-    limit = min(int(request.args.get('limit', 100)), 500)
+    try:
+        limit = int(request.args.get('limit', 100))
+    except ValueError:
+        return jsonify({'error': 'limit must be a whole number'}), 400
+    limit = max(0, min(limit, 500))
 
     with get_db_connection() as conn:
         rows = conn.execute('''
@@ -288,7 +295,9 @@ def get_nft(nft_address, token_id):
 # WalletHoldings cache — one Etherscan call per wallet per
 # refresh window, the browser never sees the API key. A
 # fresh wallet is an empty list; a failing Etherscan with no
-# cached fallback is 502.
+# cached fallback is 502 with the reason, which the client
+# words without the request's URL (the key rides in its
+# query string).
 #
 # Used by:
 #   - pages/MyNfts — the wallet's NFT grid
@@ -316,18 +325,21 @@ def get_my_nfts(wallet_address):
 # POST /api/rpc
 #
 # A transparent JSON-RPC relay to SEPOLIA_RPC_URL (Infura):
-# the raw
-# request body is forwarded untouched — single calls and
-# batch arrays alike — and the upstream answer comes back
-# verbatim. The browser only ever sees /api/rpc, so the
+# the raw request body is forwarded untouched — single calls
+# and batch arrays alike — and the upstream answer comes
+# back verbatim. The browser only ever sees /api/rpc, so the
 # Infura key never leaves the server, and the endpoint's
 # password gate means only logged-in students can spend the
-# quota. Wallet WRITES don't come through here — MetaMask
-# signs and broadcasts over its own provider.
+# quota. A failed call is a 502 told without its URL —
+# requests words its errors with the full address, Infura
+# project id and all, the very key the relay exists to keep
+# out of the browser. Wallet WRITES don't come through here
+# — MetaMask signs and broadcasts over its own provider.
 #
 # Used by:
-#   - main.jsx — the wagmi http transport
-#   - pages/SellNft, pages/NftDetail — ethers JsonRpcProvider
+#   - main.jsx — the wagmi http transport, which carries
+#     every chain read the pages make and every wait for a
+#     transaction receipt
 ############################################################
 
 @bp_marketplace.route('/api/rpc', methods=['POST'])
@@ -341,4 +353,4 @@ def rpc_proxy():
         )
         return Response(upstream.content, status=upstream.status_code, mimetype='application/json')
     except Exception as error:
-        return jsonify({'error': f'RPC relay failed: {error}'}), 502
+        return jsonify({'error': f'RPC relay failed: {describe_request_failure(error, "the RPC provider")}'}), 502

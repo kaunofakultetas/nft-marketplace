@@ -20,12 +20,14 @@
 #  on a lapsed free pin often survive only in those caches.
 #
 #  Non-IPFS URIs (arweave.net, plain https) cannot be pinned
-#  — recorded as 'skipped'. Wrongly minted metadata (not
-#  JSON, no 'image' field) is recorded as 'invalid' — the
-#  GUI diagnoses the same tokens for the student. Content
+#  — recorded as 'skipped'. Wrongly minted metadata (no JSON
+#  object, no 'image' text in it) is recorded as 'invalid' —
+#  the GUI diagnoses the same tokens for the student. Content
 #  BOTH worlds deny ends as 'unreachable' after
-#  PIN_MAX_ATTEMPTS, so a loss is a database row, never
-#  silent. Everything else retries every cycle.
+#  PIN_MAX_ATTEMPTS, so a loss is a database row naming the
+#  lost file, never silent. Everything else retries every
+#  cycle — and one token's failure never costs the others
+#  their turn.
 #
 #  "Forever" physically means: pinned blocks in the
 #  ./_DATA/ipfs volume — back that directory up.
@@ -249,7 +251,10 @@ class Pinner:
     # its full 45s timeout, and a handful of long-dead CIDs
     # retrying every cycle must not starve a student's
     # brand-new NFT of its race against the original pin
-    # lapsing.
+    # lapsing. For the same reason a token whose sync throws —
+    # a database refusing its row, anything unforeseen — is
+    # logged and passed over, never the end of the cycle: the
+    # tokens sorted after it would never get their turn again.
     #
     # Used by:
     #   - _loop (above)
@@ -276,7 +281,10 @@ class Pinner:
             return meta['Attempts'] if meta else 0
 
         for token in sorted(tokens, key=attempts_so_far):
-            self._sync_token(token['NftAddress'], token['TokenId'], state)
+            try:
+                self._sync_token(token['NftAddress'], token['TokenId'], state)
+            except Exception as error:
+                print(f'[pinner] error on {token["NftAddress"]}#{token["TokenId"]}: {error} — retrying next cycle', flush=True)
 
 
 
@@ -292,8 +300,10 @@ class Pinner:
     # metadata is pinned, so the cat is a local read): parse
     # the metadata JSON and pin the IMAGE root CID. Each
     # stage's failures increment Attempts and flip to
-    # 'unreachable' at the cap; early returns keep the happy
-    # path readable.
+    # 'unreachable' at the cap, the row naming the file the
+    # stage could not get — its URI and root CID, as far as the
+    # stage got to know them — so a loss says what was lost.
+    # Early returns keep the happy path readable.
     #
     # Used by:
     #   - _sync (above)
@@ -305,6 +315,7 @@ class Pinner:
         meta = state.get((nft_address, token_id, 'metadata'))
         if meta is None or meta['Status'] == 'pending':
             attempts = (meta['Attempts'] if meta else 0) + 1
+            uri, root_cid = '', None
 
             try:
                 uri = self._resolve_token_uri(nft_address, token_id)
@@ -322,7 +333,7 @@ class Pinner:
                 meta = {'Uri': uri, 'Status': 'pinned'}
             except Exception as error:
                 status = 'unreachable' if attempts >= PIN_MAX_ATTEMPTS else 'pending'
-                self._record(nft_address, token_id, 'metadata', '', None, status, attempts)
+                self._record(nft_address, token_id, 'metadata', uri, root_cid, status, attempts)
                 if status == 'unreachable':
                     print(f'[pinner] gave up on metadata of {nft_address}#{token_id}: {error}', flush=True)
                 return
@@ -347,18 +358,20 @@ class Pinner:
             return
 
         # DIAGNOSE, don't repair (mirrors the GUI): metadata that
-        # is not JSON, or lacks the standard 'image' field, is a
-        # WRONGLY MINTED token — recorded as 'invalid' once, no
-        # retries. The non-standard 'image_url' is deliberately
-        # not honored.
+        # is no JSON OBJECT — not JSON at all, or a list, a
+        # string, a number, null — or whose standard 'image'
+        # field is missing or no text, is a WRONGLY MINTED token
+        # — recorded as 'invalid' once, no retries. The
+        # non-standard 'image_url' is deliberately not honored.
         try:
-            image_uri = json.loads(raw).get('image') or ''
+            metadata = json.loads(raw)
         except ValueError:
-            image_uri = ''
+            metadata = None
+        image_uri = metadata.get('image') if isinstance(metadata, dict) else None
 
-        if not image_uri:
+        if not isinstance(image_uri, str) or not image_uri:
             self._record(nft_address, token_id, 'image', '', None, 'invalid', attempts)
-            print(f'[pinner] invalid metadata of {nft_address}#{token_id}: not JSON or no "image" field', flush=True)
+            print(f'[pinner] invalid metadata of {nft_address}#{token_id}: no JSON object with an "image" text', flush=True)
             return
 
         image_path = _extract_ipfs_path(image_uri)
@@ -367,14 +380,14 @@ class Pinner:
             print(f'[pinner] skipped image of {nft_address}#{token_id}: not IPFS ({image_uri[:60]})', flush=True)
             return
 
+        root_cid = image_path.split('/')[0]
         try:
-            root_cid = image_path.split('/')[0]
             self._pin(root_cid)
             self._record(nft_address, token_id, 'image', image_uri, root_cid, 'pinned', attempts)
             print(f'[pinner] pinned image of {nft_address}#{token_id}: {root_cid}', flush=True)
         except Exception as error:
             status = 'unreachable' if attempts >= PIN_MAX_ATTEMPTS else 'pending'
-            self._record(nft_address, token_id, 'image', image_uri, None, status, attempts)
+            self._record(nft_address, token_id, 'image', image_uri, root_cid, status, attempts)
             if status == 'unreachable':
                 print(f'[pinner] gave up on image of {nft_address}#{token_id}: {error}', flush=True)
 

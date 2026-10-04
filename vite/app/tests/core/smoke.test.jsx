@@ -7,8 +7,9 @@
 //  answers reach the screen; wagmi's reads cross the RPC relay
 //  to the Sepolia double (folded into a multicall) and the
 //  token URIs they return lead through the IPFS double to the
-//  metadata on the cards; ethers reaches the same chain for an
-//  owner; a backend refusal becomes the page's own error
+//  metadata on the cards; an owner read on its own request
+//  reaches the same chain; a backend refusal becomes the
+//  page's own error
 //  presentation; a returning student's MetaMask double is
 //  reconnected on load, and a transaction it sends is mined
 //  by the chain; the real App boots at a route — and the
@@ -72,7 +73,7 @@ describe('harness smoke', () => {
   });
 
 
-  it('reads an owner through ethers and the relay', async () => {
+  it('reads an owner through wagmi and the relay, on its own request', async () => {
     renderPage(<NftDetailPage />, { route: `/nft/${f.PUGS}/0`, path: '/nft/:nftAddress/:tokenId' });
 
     expect(await screen.findByRole('link', { name: `${short(f.checksummed(f.SELLER))} ↗` })).toBeInTheDocument();
@@ -82,10 +83,10 @@ describe('harness smoke', () => {
 
   it('passes a backend refusal on to the page as its own error presentation', async () => {
     installMetamask({ connected: true });
-    given.error('get', '/api/my-nfts/:wallet', 'Etherscan request failed: 503 Server Error', 502);
+    given.error('get', '/api/my-nfts/:wallet', 'Etherscan request failed: Etherscan answered HTTP 503', 502);
     renderPage(<MyNftsPage />);
 
-    expect(await screen.findByText('Error: Etherscan request failed: 503 Server Error')).toBeInTheDocument();
+    expect(await screen.findByText('Error: Etherscan request failed: Etherscan answered HTTP 503')).toBeInTheDocument();
   });
 
 

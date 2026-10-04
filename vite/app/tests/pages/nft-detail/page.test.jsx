@@ -4,23 +4,22 @@
 //
 //  One NFT, loaded PROGRESSIVELY from three sources, each
 //  filling its own panels: the metadata through the IPFS
-//  gateway (image, name, description, the diagnosis), the
-//  owner through ethers and the relay, the listing and history
-//  from the backend — a dead IPFS file never holds up the
-//  backend's data. Pinned down here: every panel's skeleton
+//  gateway (image, name, description, attributes, the
+//  diagnosis), the owner through the relay on its own request,
+//  the listing and history from the backend — a dead IPFS
+//  file never holds up the backend's data. Pinned down here:
+//  every panel's skeleton
 //  while its source is out; the token's facts — its name and
 //  description, the collection linked on Etherscan, the id,
 //  the raw metadata JSON one click away, the current price
-//  while it is listed — and the way back; the owner — another
-//  account linked on Etherscan, "You" for the student, a
-//  token whose ownerOf reverts said to be unknown; the image —
-//  from the gateway, the grey placeholder when the link inside
-//  healthy metadata is dead; and every diagnosis of a wrongly
-//  minted token, with its fix, above everything else.
-//
-//  Pinned: the metadata's attributes never reach the page, so
-//  the Attributes panel never shows; and a visitor without a
-//  wallet is told THEY own a token whose ownerOf reverted.
+//  while it is listed — the attributes, and the way back; the
+//  owner — another account linked on Etherscan, "You" for the
+//  student and only for them, a token whose ownerOf reverts
+//  said to be unknown, to a visitor without a wallet too; the
+//  image — from the gateway, the grey placeholder when the
+//  link inside healthy metadata is dead; and every diagnosis
+//  of a wrongly minted token, with its fix, above everything
+//  else.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
@@ -49,7 +48,7 @@ const PROBLEM = '⚠ This NFT has a problem';
 //
 // nameHeading waits for the token's name — the page's h1;
 // holdOwnerReads keeps every direct call to a contract (the
-// owner lookup through ethers) unanswered while the
+// owner lookup, on its own request) unanswered while the
 // multicalled reads (tokenURI, the balance) pass, so the
 // owner alone stays out.
 // -----------------------------------------------------------
@@ -98,7 +97,7 @@ describe('Loading progressively', () => {
   });
 
 
-  it('reads the owner once, through ethers and the relay', async () => {
+  it('reads the owner once, through the relay on its own request', async () => {
     renderDetail(f.PUGS, '0');
     await screen.findByRole('link', { name: `${f.short(f.checksummed(f.SELLER))} ↗` });
     expect(sepolia.readsOf('ownerOf')).toEqual([{ to: f.PUGS, functionName: 'ownerOf', args: [0n], via: 'direct' }]);
@@ -189,10 +188,31 @@ describe('The token', () => {
   });
 
 
-  it.fails('shows the token\'s attributes — PINNED KNOWN BUG: useNftMetadata drops every field but name, description and image, so the Attributes panel never renders', async () => {
-    renderDetail(f.PUGS, '0');
-    await nameHeading('PUG');
-    expect(await screen.findByRole('heading', { level: 3, name: 'Attributes' }, { timeout: 1500 })).toBeInTheDocument();
+  it('shows the token\'s attributes — each trait with its value', async () => {
+    renderDetail(f.ART, '0');
+    await nameHeading('Vilnius at Dusk');
+    expect(await screen.findByRole('heading', { level: 3, name: 'Attributes' })).toBeInTheDocument();
+    expect(panel('Attributes')).toHaveTextContent('PaletteAmberEdition1');
+  });
+
+
+  it('shows attributes that are no trait-and-value pair as what text they have, without crashing', async () => {
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, { ...f.ART_0_METADATA, attributes: ['Rare', { trait_type: 'Mood', value: { calm: true } }, null] });
+    renderDetail(f.ART, '0');
+    await nameHeading('Vilnius at Dusk');
+    expect(await screen.findByRole('heading', { level: 3, name: 'Attributes' })).toBeInTheDocument();
+    expect(panel('Attributes')).toHaveTextContent('RareMood');
+    expect(screen.queryByTestId('render-crashed')).toBeNull();
+  });
+
+
+  it('leaves the Attributes card out for metadata without any', async () => {
+    const { attributes: _, ...withoutAttributes } = f.ART_0_METADATA;
+    given.json('get', `/ipfs/${f.ART_DIR}/0.json`, withoutAttributes);
+    renderDetail(f.ART, '0');
+    await nameHeading('Vilnius at Dusk');
+    await settle(200);
+    expect(screen.queryByRole('heading', { level: 3, name: 'Attributes' })).toBeNull();
   });
 });
 
@@ -235,9 +255,9 @@ describe('The owner', () => {
   });
 
 
-  it.fails('says the owner is unknown to a visitor without a wallet, too — PINNED KNOWN BUG: an unknown owner and no wallet compare equal (undefined === undefined), so the visitor is told "You"', async () => {
+  it('says the owner is unknown to a visitor without a wallet, too — never "You"', async () => {
     renderDetail(f.ART, '6', { wallet: false });
-    await settle(500);
+    expect(await within(infoRow('Current Owner:')).findByText('unknown (ownerOf reverted)')).toBeInTheDocument();
     expect(within(infoRow('Current Owner:')).queryByText('You')).toBeNull();
   });
 });

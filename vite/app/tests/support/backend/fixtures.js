@@ -77,8 +77,8 @@ export const SEPOLIA_CHAIN_ID = 11155111;
 // checksummed / short / wei / timeOf
 // -----------------------------------------------------------
 //
-// checksummed gives an address in the EIP-55 form wagmi and
-// ethers hand the page (the backend answers lowercase); short
+// checksummed gives an address in the EIP-55 form wagmi hands
+// the page (the backend answers lowercase); short
 // writes an address the way the GUI shortens it everywhere —
 // its first six and last four characters around three dots;
 // wei turns an ether amount into the wei string the backend
@@ -88,8 +88,8 @@ export const SEPOLIA_CHAIN_ID = 11155111;
 //
 // Used by:
 //   - the fixtures below
-//   - tests asserting what wagmi / ethers show, an address on
-//     screen, or a date
+//   - tests asserting what wagmi shows, an address on screen,
+//     or a date
 // -----------------------------------------------------------
 
 export const checksummed = (address) => getAddress(address);

@@ -14,13 +14,17 @@
 #
 #    GET  /api/stats                      — totals, indexer position, archive, topics
 #    GET  /api/listings                   — the storefront
-#    GET  /api/activity                   — the feed, ?limit= defaulting to 100, capped at 500
+#    GET  /api/activity                   — the feed, ?limit= defaulting to 100, held between 0 and 500
 #    GET  /api/nft/<nftAddress>/<tokenId> — one token's listing, history and archive
 #    GET  /api/my-nfts/<wallet>           — the wallet's holdings, a 502 on failure
 #    POST /api/rpc                        — the JSON-RPC relay, byte for byte
 #
 #  Etherscan is a fake; the relay's upstream is a mock — no
-#  request leaves the test.
+#  request leaves the test. The tests that keep the keys out
+#  of the 502 answers take requests' REAL error path instead,
+#  with no host name resolving (helpers.no_dns): the error
+#  text is exactly what a live outage produces, and still not
+#  a packet leaves.
 ############################################################
 
 
@@ -33,6 +37,7 @@ import requests
 
 import main
 from app.marketplace import routes
+from app.marketplace.etherscan import EtherscanClient
 from app.marketplace.indexer import MarketplaceIndexer
 from app.marketplace.ownership import WalletHoldings
 
@@ -117,7 +122,7 @@ class RouteTestCase(helpers.DbTestCase):
 
     def story(self):
         with mock.patch('app.marketplace.indexer.time.time', return_value=SCANNED_AT), helpers.quiet():
-            MarketplaceIndexer(self.etherscan)._store_logs(helpers.STORY_LOGS, helpers.TIP_BLOCK)
+            MarketplaceIndexer(self.etherscan)._store_logs(helpers.STORY_LOGS, helpers.DEPLOYMENT_BLOCK, helpers.TIP_BLOCK)
         for token_id in (0, 1, 2):
             self.seed_pin(helpers.PUGS, token_id, 'metadata', 'pinned', cid=PUG_JSON_CID)
             self.seed_pin(helpers.PUGS, token_id, 'image', 'pinned', cid=PUG_IMAGE_CID)
@@ -262,6 +267,16 @@ class ActivityTests(RouteTestCase):
         _, body = self.get('/api/activity', limit=1000)
         self.assertEqual(len(body['activity']), 500)
 
+    def test_a_negative_limit_is_held_at_nothing(self):
+        # SQLite reads a negative LIMIT as no limit at all
+        self.seed_many(600)
+        self.assertEqual(self.get('/api/activity', limit=-1), (200, {'activity': []}))
+
+    def test_a_limit_that_is_no_whole_number_is_a_400_saying_so(self):
+        for limit in ('lots', '2.5'):
+            with self.subTest(limit=limit):
+                self.assertEqual(self.get('/api/activity', limit=limit), (400, {'error': 'limit must be a whole number'}))
+
 
 
 
@@ -354,6 +369,31 @@ class WalletTests(RouteTestCase):
         self.assertEqual(self.get(f'/api/my-nfts/{helpers.STUDENT}'),
                          (502, {'error': 'Etherscan request failed: Etherscan tokennfttx error: Max rate limit reached'}))
 
+    def behind_the_real_client(self):
+        # The holdings cache in front of a REAL EtherscanClient —
+        # the one whose failures requests itself words
+        patcher = mock.patch.object(routes, 'wallet_holdings', WalletHoldings(EtherscanClient()))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_an_etherscan_outage_never_shows_the_api_key(self):
+        self.behind_the_real_client()
+        with helpers.no_dns():
+            response = self.client.get(f'/api/my-nfts/{helpers.STUDENT}')
+        self.assertNotIn(helpers.TEST_ETHERSCAN_KEY, response.get_data(as_text=True))
+        self.assertEqual((response.status_code, response.get_json()),
+                         (502, {'error': 'Etherscan request failed: Etherscan could not be reached'}))
+
+    def test_an_etherscan_error_status_never_shows_the_api_key(self):
+        # raise_for_status words a 403 with the request's full URL
+        self.behind_the_real_client()
+        refused = helpers.scripted_get([helpers.etherscan_response({'message': 'Forbidden'}, status=403)])
+        with mock.patch('app.marketplace.etherscan.requests.get', side_effect=refused):
+            response = self.client.get(f'/api/my-nfts/{helpers.STUDENT}')
+        self.assertNotIn(helpers.TEST_ETHERSCAN_KEY, response.get_data(as_text=True))
+        self.assertEqual((response.status_code, response.get_json()),
+                         (502, {'error': 'Etherscan request failed: Etherscan answered HTTP 403'}))
+
 
 
 
@@ -367,7 +407,9 @@ class WalletTests(RouteTestCase):
 #
 # The relay's upstream is a mock answering with a real
 # requests.Response — what Infura sends back is under the
-# test's control, and nothing leaves the test.
+# test's control, and nothing leaves the test. The outage
+# that must not show the project id is requests' real one:
+# no mock, no host name resolving.
 ############################################################
 
 class RelayTests(RouteTestCase):
@@ -411,7 +453,22 @@ class RelayTests(RouteTestCase):
     def test_an_unreachable_upstream_is_a_502_saying_why(self):
         self.upstream(error=requests.ConnectionError('connection refused'))
         response = self.relay(b'{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}')
-        self.assertEqual((response.status_code, response.get_json()), (502, {'error': 'RPC relay failed: connection refused'}))
+        self.assertEqual((response.status_code, response.get_json()),
+                         (502, {'error': 'RPC relay failed: the RPC provider could not be reached'}))
+
+    def test_a_slow_upstream_is_a_502_saying_so(self):
+        self.upstream(error=requests.ReadTimeout('read timed out'))
+        response = self.relay(b'{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}')
+        self.assertEqual((response.status_code, response.get_json()),
+                         (502, {'error': 'RPC relay failed: the RPC provider did not answer in time'}))
+
+    def test_an_outage_never_shows_the_rpc_providers_key(self):
+        # requests' own words for an unreachable host carry the
+        # whole address, Infura project id included
+        with helpers.no_dns():
+            response = self.relay(b'{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}')
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn(helpers.TEST_INFURA_PROJECT, response.get_data(as_text=True))
 
     def test_the_relay_only_takes_posts(self):
         self.assertEqual(self.client.get('/api/rpc').status_code, 405)

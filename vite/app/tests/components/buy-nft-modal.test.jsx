@@ -8,11 +8,10 @@
 //  amount), and tells the student how it went in a toast: the
 //  purchase on its way, a rejection in friendly words, or the
 //  first line of what the wallet said. The wallet's popup does
-//  the real waiting; the chain double mines what it sends.
-//
-//  Pinned: the modal stays open after a successful purchase,
-//  and OK stays live while MetaMask's confirmation is open —
-//  either way a second click sends a second purchase.
+//  the real waiting; the chain double mines what it sends. The
+//  modal closes once the purchase is on its way, and OK is
+//  disabled while MetaMask's confirmation is open — a second
+//  click must never send a second purchase.
 // -----------------------------------------------------------
 
 import { describe, it, expect, vi } from 'vitest';
@@ -178,19 +177,30 @@ describe('Buying', () => {
   });
 
 
-  it.fails('closes once the purchase has gone out — PINNED KNOWN BUG: onClose is never called on success, the question stays up and its OK buys again', async () => {
+  it('closes once the purchase has gone out', async () => {
     const { user, onClose } = await renderModal();
     await user.click(ok());
     await toastSaying(SUCCESS);
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
 
-  it.fails('asks MetaMask once for a double click — PINNED KNOWN BUG: OK stays live while the confirmation is open, a second click queues a second purchase', async () => {
+  it('stays open after a failed purchase, OK usable again', async () => {
+    const { user, metamask, onClose } = await renderModal();
+    metamask.decline('eth_sendTransaction');
+    await user.click(ok());
+    await toastSaying('Transaction rejected in the wallet.');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(ok()).toBeEnabled();
+  });
+
+
+  it('asks MetaMask once for a double click — OK is disabled while the confirmation is open', async () => {
     const { user, metamask } = await renderModal();
     const confirmation = metamask.hold('eth_sendTransaction');
     await user.click(ok());
     await waitFor(() => expect(confirmation.called).toBe(true));
+    expect(ok()).toBeDisabled();
     await user.click(ok());
     await settle(100);
     await act(async () => confirmation.release());

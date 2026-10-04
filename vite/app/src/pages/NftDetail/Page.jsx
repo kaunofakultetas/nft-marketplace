@@ -3,14 +3,21 @@
 //
 //  /nft/:nftAddress/:tokenId — reached by clicking any NFTBox
 //  card. Owner and metadata are read straight from the chain
-//  (ownerOf/tokenURI via the RPC), listing state and the event
-//  history come from the backend (GET /api/nft/...). The
-//  actions panel adapts:
+//  (ownerOf/tokenURI through wagmi and the RPC relay), listing
+//  state and the event history come from the backend
+//  (GET /api/nft/...). The actions panel adapts:
 //    - owner, listed      → Update Listing / Cancel (modal)
 //    - owner, not listed  → List for Sale (→ /sell-nft
 //                           prefilled)
 //    - visitor, listed    → Buy Now (modal)
 //    - visitor, unlisted  → "not for sale" note
+//
+//  Nothing unknown passes for a fact: a backend read that
+//  failed says so instead of "not for sale" and "no history",
+//  an owner the chain could not be asked about is not blamed
+//  on the token, and an answer of the wrong shape (a price or
+//  CID that is no text) is shown as unknown, never crashing
+//  the page.
 //
 //  Everything technical is one click deep on purpose:
 //  contract and owner link to Etherscan, every history
@@ -43,13 +50,14 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useAccount, useBalance } from 'wagmi';
-import { ethers } from 'ethers';
+import { useAccount, useBalance, useReadContract } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
+import { nftAbi } from '@/constants';
 import { apiGet } from '@/utils/api';
+import { contractRefused } from '@/utils/chain';
 import { getConfig } from '@/config';
 import { useNftMetadata } from '@/hooks/useNftMetadata';
-import { truncateAddress, etherscanAddressUrl, etherscanTxUrl, formatDateTime } from '@/utils/format';
+import { truncateAddress, etherscanAddressUrl, etherscanTxUrl, formatDateTime, formatEth, parseWei } from '@/utils/format';
 import UpdateListingModal from '@/components/UpdateListingModal';
 import BuyNftModal from '@/components/BuyNftModal';
 
@@ -128,6 +136,9 @@ function ImagePanel({ metadata, tokenId, loading }) {
 // The teaching moment: a wrongly minted (or lost-content)
 // token gets its diagnosis and the concrete fix, in amber,
 // above everything else. Renders nothing for healthy tokens.
+// A notice that is no diagnosis — the chain could not be
+// read — brings its own title instead of "This NFT has a
+// problem".
 //
 // Used by:
 //   - NftDetailPage (below) — right column, first card
@@ -140,7 +151,7 @@ function ProblemPanel({ problem }) {
 
   return (
     <div className="bg-amber-50 border border-amber-300 rounded-xl p-6">
-      <h3 className="text-xl font-bold text-amber-800 mb-1">⚠ This NFT has a problem</h3>
+      <h3 className="text-xl font-bold text-amber-800 mb-1">⚠ {problem.title || 'This NFT has a problem'}</h3>
       <p className="font-semibold text-amber-800 mb-2">{problem.message}</p>
       <p className="text-sm text-amber-700">{problem.hint}</p>
     </div>
@@ -158,13 +169,15 @@ function ProblemPanel({ problem }) {
 // -----------------------------------------------------------
 //
 // Name, description and the facts rows; the metadata link
-// opens the raw JSON students can inspect.
+// opens the raw JSON students can inspect. An owner that
+// could not be read is "unknown", with the reason — the
+// contract refused, or the chain could not be asked.
 //
 // Used by:
 //   - NftDetailPage (below) — right column, second card
 // -----------------------------------------------------------
 
-function InfoPanel({ metadata, metadataURL, nftAddress, tokenId, currentOwner, isOwner, isListed, currentPrice, metaLoading, ownerLoading }) {
+function InfoPanel({ metadata, metadataURL, nftAddress, tokenId, currentOwner, ownerUnknown, isOwner, isListed, currentPrice, metaLoading, ownerLoading }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
       {metaLoading ? (
@@ -217,7 +230,7 @@ function InfoPanel({ metadata, metadataURL, nftAddress, tokenId, currentOwner, i
               {truncateAddress(currentOwner)} ↗
             </a>
           ) : (
-            <span className="font-mono text-gray-400">unknown (ownerOf reverted)</span>
+            <span className="font-mono text-gray-400">{ownerUnknown}</span>
           )}
         </div>
         {metadataURL && (
@@ -237,7 +250,7 @@ function InfoPanel({ metadata, metadataURL, nftAddress, tokenId, currentOwner, i
           <div className="flex justify-between text-lg font-bold pt-2 border-t">
             <span>Current Price:</span>
             <span className="text-[var(--color-primary)]">
-              {ethers.formatUnits(currentPrice, 'ether')} ETH
+              {formatEth(currentPrice) ? `${formatEth(currentPrice)} ETH` : 'unknown'}
             </span>
           </div>
         )}
@@ -260,21 +273,24 @@ function InfoPanel({ metadata, metadataURL, nftAddress, tokenId, currentOwner, i
 // Now (when listed) — DISABLED with the reason shown when
 // the wallet cannot cover the price (gas comes on top, the
 // wallet itself warns about that part). Only rendered with
-// a connected wallet.
+// a connected wallet. A listing the backend could not be
+// asked about is said to be unknown, never "not for sale";
+// a listed price that cannot be read offers no purchase.
 //
 // Used by:
 //   - NftDetailPage (below) — right column, second card
 // -----------------------------------------------------------
 
-function ActionsPanel({ isOwner, isListed, currentPrice, nftAddress, tokenId, onUpdateClick, onBuyClick, loading }) {
+function ActionsPanel({ isOwner, isListed, listingUnknown, currentPrice, nftAddress, tokenId, onUpdateClick, onBuyClick, loading }) {
 
   const { address } = useAccount();
   const { data: balance } = useBalance({ address });
+  const price = formatEth(currentPrice);
 
   // Gate only on a DEFINITIVE "can't afford" — while the
   // balance is still loading the button stays usable
   const insufficient = Boolean(
-    balance && currentPrice && balance.value < BigInt(currentPrice)
+    balance && price && balance.value < parseWei(currentPrice)
   );
 
 
@@ -293,7 +309,9 @@ function ActionsPanel({ isOwner, isListed, currentPrice, nftAddress, tokenId, on
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
       <h3 className="text-xl font-bold mb-4">Actions</h3>
 
-      {isOwner ? (
+      {listingUnknown ? (
+        <p className="text-gray-600">Whether this NFT is for sale could not be loaded</p>
+      ) : isOwner ? (
         <div className="space-y-3">
           {isListed ? (
             <>
@@ -320,6 +338,8 @@ function ActionsPanel({ isOwner, isListed, currentPrice, nftAddress, tokenId, on
             </>
           )}
         </div>
+      ) : isListed && currentPrice && !price ? (
+        <p className="text-gray-600">This NFT is listed, but its price could not be read</p>
       ) : isListed && currentPrice ? (
         insufficient ? (
           <div>
@@ -327,11 +347,11 @@ function ActionsPanel({ isOwner, isListed, currentPrice, nftAddress, tokenId, on
               disabled
               className="w-full bg-gray-300 text-gray-500 py-3 px-6 rounded-lg font-semibold cursor-not-allowed"
             >
-              Buy Now for {ethers.formatUnits(currentPrice, 'ether')} ETH
+              Buy Now for {price} ETH
             </button>
             <p className="text-sm text-red-600 mt-2">
               Insufficient balance — your wallet holds{' '}
-              {Number(ethers.formatUnits(balance.value, 'ether')).toFixed(4)} ETH
+              {Number(formatEth(balance.value)).toFixed(4)} ETH
             </p>
           </div>
         ) : (
@@ -339,7 +359,7 @@ function ActionsPanel({ isOwner, isListed, currentPrice, nftAddress, tokenId, on
             onClick={onBuyClick}
             className="w-full bg-[var(--color-primary)] text-white py-3 px-6 rounded-lg hover:bg-[var(--color-primary-hover)] font-semibold transition-colors"
           >
-            Buy Now for {ethers.formatUnits(currentPrice, 'ether')} ETH
+            Buy Now for {price} ETH
           </button>
         )
       ) : (
@@ -365,7 +385,10 @@ function ActionsPanel({ isOwner, isListed, currentPrice, nftAddress, tokenId, on
 // cancellation), the type chip, the actor's FULL address
 // (linking to Etherscan) + the transaction link, the exact
 // block datetime (YYYY-MM-DD HH:MM:SS) and the price
-// right-aligned.
+// right-aligned. An event type the page does not know is
+// drawn neutral under its own name, a price that cannot be
+// read is left out, and a failed read says what went wrong
+// instead of "No transaction history yet".
 //
 // Used by:
 //   - NftDetailPage (below) — right column, third card
@@ -395,13 +418,19 @@ const STRIPE = {
   Canceled: { dot: 'bg-gray-400', chip: 'bg-gray-200 text-gray-600', label: 'Cancelled', joiner: 'by' },
 };
 
-function HistoryPanel({ events, loading }) {
+// The look of a type the timeline does not know — neutral,
+// labelled with the type itself
+const unknownStripe = (type) => ({ dot: 'bg-gray-300', chip: 'bg-gray-100 text-gray-500', label: String(type), joiner: 'by' });
+
+function HistoryPanel({ events, loading, error }) {
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
       <h3 className="text-xl font-bold mb-5">Transaction History</h3>
 
-      {loading ? (
+      {error ? (
+        <p className="text-red-800 text-sm">Error: {error.message}</p>
+      ) : loading ? (
         <div className="space-y-5 animate-pulse">
           {[0, 1, 2].map((i) => (
             <div key={i} className="relative pl-8">
@@ -411,7 +440,7 @@ function HistoryPanel({ events, loading }) {
             </div>
           ))}
         </div>
-      ) : events?.length > 0 ? (
+      ) : Array.isArray(events) && events.length > 0 ? (
         <div className="relative">
 
           {/* The rail the event nodes sit on */}
@@ -419,8 +448,9 @@ function HistoryPanel({ events, loading }) {
 
           <div className="space-y-6">
             {events.map((event, index) => {
-              const stripe = STRIPE[event.type] || STRIPE.Canceled;
+              const stripe = STRIPE[event.type] || unknownStripe(event.type);
               const actor = event.type === 'Bought' ? event.buyer : event.seller;
+              const price = formatEth(event.price);
 
               return (
                 <div key={index} className="relative pl-8">
@@ -450,9 +480,9 @@ function HistoryPanel({ events, loading }) {
                       </div>
                     </div>
 
-                    {event.price && (
+                    {price && (
                       <div className="text-sm font-bold text-gray-900 whitespace-nowrap">
-                        {ethers.formatUnits(event.price, 'ether')} ETH
+                        {price} ETH
                       </div>
                     )}
                   </div>
@@ -502,7 +532,7 @@ const PIN_STATUS_STYLES = {
 
 function ArchivePanel({ archive }) {
 
-  if (!archive?.length) return null;
+  if (!Array.isArray(archive) || !archive.length) return null;
 
 
   return (
@@ -516,7 +546,7 @@ function ArchivePanel({ archive }) {
           <div key={entry.kind} className="flex justify-between items-center">
             <span className="capitalize text-gray-600">{entry.kind}</span>
             <span className="flex items-center gap-2">
-              {entry.cid && (
+              {typeof entry.cid === 'string' && entry.cid && (
                 <span className="font-mono text-xs text-gray-500" title={entry.cid}>
                   {entry.cid.slice(0, 12)}...
                 </span>
@@ -542,11 +572,19 @@ function ArchivePanel({ archive }) {
 // AttributesPanel
 // -----------------------------------------------------------
 //
-// Only rendered when the metadata carries attributes.
+// Only rendered when the metadata carries attributes. Each
+// is a trait and its value as the standard has them; an
+// entry that is no such pair (a bare text, a value that is
+// an object) shows what text it has, never crashing the
+// page.
 //
 // Used by:
 //   - NftDetailPage (below) — right column, last card
 // -----------------------------------------------------------
+
+// A trait or value as text — numbers and booleans read as
+// themselves, anything else that is no text as nothing
+const attributeText = (value) => (['string', 'number', 'boolean'].includes(typeof value) ? String(value) : '');
 
 function AttributesPanel({ attributes }) {
   return (
@@ -555,8 +593,8 @@ function AttributesPanel({ attributes }) {
       <div className="grid grid-cols-2 gap-3">
         {attributes.map((attr, index) => (
           <div key={index} className="bg-gray-50 rounded p-3">
-            <div className="text-xs text-gray-600 uppercase">{attr.trait_type}</div>
-            <div className="font-semibold">{attr.value}</div>
+            <div className="text-xs text-gray-600 uppercase">{attributeText(attr?.trait_type)}</div>
+            <div className="font-semibold">{attributeText(typeof attr === 'object' ? attr?.value : attr)}</div>
           </div>
         ))}
       </div>
@@ -575,7 +613,9 @@ function AttributesPanel({ attributes }) {
 // -----------------------------------------------------------
 //
 // Loads owner + metadata from the chain, listing/history from
-// the backend, and owns the two modals' visibility.
+// the backend, and owns the two modals' visibility. "You" is
+// said only when both the owner and the visitor's wallet are
+// known and match — an unknown owner is nobody's.
 //
 // Used by:
 //   - App.jsx — route "/nft/:nftAddress/:tokenId"
@@ -587,50 +627,39 @@ export default function NftDetailPage() {
   const { address: userAddress, isConnected } = useAccount();
   const { metadata, problem, metadataURL, loading: metaLoading } = useNftMetadata(nftAddress, tokenId);
 
-  const [currentOwner, setCurrentOwner] = useState(null);
-  const [ownerLoading, setOwnerLoading] = useState(true);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showBuyModal, setShowBuyModal] = useState(false);
 
 
   // The backend stores addresses lowercase and lowercases the
   // path param itself — the URL may carry the checksummed form
-  const { data: historyData, isLoading: historyLoading } = useQuery({
+  const { data: historyData, isLoading: historyLoading, error: historyError } = useQuery({
     queryKey: ['nft', nftAddress, tokenId],
     queryFn: () => apiGet(`/api/nft/${nftAddress}/${tokenId}`),
   });
 
 
-  // Only the owner still comes from a direct chain read —
-  // metadata (and its diagnosis) lives in useNftMetadata
-  const fetchOwner = async () => {
-    setOwnerLoading(true);
-    try {
-      const provider = new ethers.JsonRpcProvider(getConfig().rpcUrl);
-      const nftContract = new ethers.Contract(
-        nftAddress,
-        ['function ownerOf(uint256 tokenId) view returns (address)'],
-        provider
-      );
-      setCurrentOwner(await nftContract.ownerOf(tokenId));
-    } catch (error) {
-      console.error('ownerOf failed:', error);
-      setCurrentOwner(null);
-    } finally {
-      setOwnerLoading(false);
-    }
-  };
+  // The owner comes from the chain, beside the metadata's own
+  // read in useNftMetadata — a revert says the token has none
+  // (burned, or never minted), a failure on the way says
+  // nothing about the token. It is its own request, outside
+  // the multicall batch the page's other chain reads share
+  // (tokenURI, the wallet's balance): the owner row and the
+  // actions panel fill as soon as the owner is in, whatever
+  // keeps those reads
+  const { data: currentOwner, error: ownerError, isLoading: ownerLoading } = useReadContract({
+    address: nftAddress,
+    abi: nftAbi,
+    functionName: 'ownerOf',
+    args: [tokenId],
+    batch: false,
+  });
+  const ownerUnknown = ownerError && !contractRefused(ownerError)
+    ? 'unknown (the chain cannot be read right now)'
+    : 'unknown (ownerOf reverted)';
 
 
-  useEffect(() => {
-    if (nftAddress && tokenId) {
-      fetchOwner();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nftAddress, tokenId]);
-
-
-  const isOwner = currentOwner?.toLowerCase() === userAddress?.toLowerCase();
+  const isOwner = Boolean(currentOwner && userAddress) && currentOwner.toLowerCase() === userAddress.toLowerCase();
   const isListed = Boolean(historyData?.activeListing);
   const currentPrice = historyData?.activeListing?.price || null;
 
@@ -655,6 +684,7 @@ export default function NftDetailPage() {
             nftAddress={nftAddress}
             tokenId={tokenId}
             currentOwner={currentOwner}
+            ownerUnknown={ownerUnknown}
             isOwner={isOwner}
             isListed={isListed}
             currentPrice={currentPrice}
@@ -666,6 +696,7 @@ export default function NftDetailPage() {
             <ActionsPanel
               isOwner={isOwner}
               isListed={isListed}
+              listingUnknown={Boolean(historyError)}
               currentPrice={currentPrice}
               nftAddress={nftAddress}
               tokenId={tokenId}
@@ -675,7 +706,7 @@ export default function NftDetailPage() {
             />
           )}
 
-          <HistoryPanel events={historyData?.events} loading={historyLoading} />
+          <HistoryPanel events={historyData?.events} loading={historyLoading} error={historyError} />
 
           <ArchivePanel archive={historyData?.archive} />
 

@@ -2,14 +2,18 @@
 //  [*] Tests — the display helpers (utils/format.js)
 //
 //  The transforms every page shares: an address shortened to
-//  its two recognizable ends, the Sepolia Etherscan links
+//  its two recognizable ends, a wei amount read and shown in
+//  ether — anything that is no amount read as none, never a
+//  throw while a page renders — the Sepolia Etherscan links
 //  scattered around on purpose, THE one date format of the GUI
 //  (local time, zero-padded, in the viewer's own time zone —
 //  summer and winter time, a year boundary, another zone), and
 //  formatWalletError, which boils a multi-hundred-character
 //  wallet or RPC dump down to a toast-sized sentence: viem's
-//  short message over the full one, the first line only, at
-//  most 140 characters, and one friendly sentence for every
+//  short message over the full one, the first line only —
+//  with the line it announces when it ends in a colon, the
+//  way viem gives a revert's reason — at most 140
+//  characters, and one friendly sentence for every
 //  way a student can press "Reject" — the error code, viem's
 //  words, MetaMask's own.
 // -----------------------------------------------------------
@@ -17,7 +21,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { UserRejectedRequestError, ContractFunctionExecutionError, ContractFunctionRevertedError } from 'viem';
 import * as f from '../support/backend/fixtures';
-import { truncateAddress, etherscanAddressUrl, etherscanTxUrl, formatDateTime, formatWalletError } from '@/utils/format';
+import { truncateAddress, parseWei, formatEth, etherscanAddressUrl, etherscanTxUrl, formatDateTime, formatWalletError } from '@/utils/format';
 
 
 const REJECTED = 'Transaction rejected in the wallet.';
@@ -51,6 +55,61 @@ describe('truncateAddress', () => {
     ['an empty string', ''],
   ])('shows nothing for %s — a row without an actor stays blank', (_, value) => {
     expect(truncateAddress(value)).toBe('');
+  });
+
+
+  it.each([
+    ['a number', 1234567890],
+    ['an object', { address: f.STUDENT }],
+  ])('shows nothing for %s in a malformed answer, rather than throwing', (_, value) => {
+    expect(truncateAddress(value)).toBe('');
+  });
+});
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// parseWei / formatEth
+// -----------------------------------------------------------
+
+describe('parseWei / formatEth', () => {
+
+  it.each([
+    ['the backend\'s decimal string', '50000000000000000', 50000000000000000n],
+    ['a bigint from the chain', 30000000000000000n, 30000000000000000n],
+    ['a whole number', 5e16, 50000000000000000n],
+    ['zero', '0', 0n],
+    ['an amount beyond 64 bits', '1000000000000000000000000000001', 1000000000000000000000000000001n],
+  ])('reads %s as a bigint', (_, value, wei) => {
+    expect(parseWei(value)).toBe(wei);
+  });
+
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty string', ''],
+    ['text that is no number', '💾 <script>alert(1)</script>'],
+    ['a decimal', '0.05'],
+    ['a negative amount', '-1'],
+    ['a negative bigint', -1n],
+    ['a fraction of a wei', 1.5],
+    ['an object', { wei: '1' }],
+  ])('reads %s as no amount at all', (_, value) => {
+    expect(parseWei(value)).toBeNull();
+    expect(formatEth(value)).toBeNull();
+  });
+
+
+  it('shows ether the way ethers renders it — one decimal at least, every wei kept', () => {
+    expect(formatEth('50000000000000000')).toBe('0.05');
+    expect(formatEth(10n ** 18n)).toBe('1.0');
+    expect(formatEth('0')).toBe('0.0');
+    expect(formatEth('1000000000000000001')).toBe('1.000000000000000001');
   });
 });
 
@@ -197,7 +256,7 @@ describe('formatWalletError', () => {
   });
 
 
-  it.fails('keeps the reason of a revert that gives one — PINNED KNOWN BUG: viem puts the reason on its second line, so the toast ends at "…reverted with the following reason:"', () => {
+  it('keeps the reason of a revert that gives one, which viem puts on the line after its sentence', () => {
     const reason = 'ERC721: approve caller is not token owner or approved for all';
     const reverted = new ContractFunctionRevertedError({ abi: [], functionName: 'approve', message: reason });
     const wrapped = new ContractFunctionExecutionError(reverted, { abi: [], functionName: 'approve' });

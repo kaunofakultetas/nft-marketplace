@@ -17,9 +17,8 @@
 // -----------------------------------------------------------
 
 import { useQuery } from '@tanstack/react-query';
-import { ethers } from 'ethers';
 import { apiGet } from '@/utils/api';
-import { etherscanAddressUrl, formatDateTime } from '@/utils/format';
+import { etherscanAddressUrl, formatDateTime, formatEth } from '@/utils/format';
 
 
 // The deployed contract's interface — functions as students
@@ -178,7 +177,7 @@ export default function AboutPage() {
           <FactRow label="Events indexed">{stats?.totalEvents ?? '…'}</FactRow>
           <FactRow label="Active listings">{stats?.activeListings ?? '…'}</FactRow>
           <FactRow label="Lifetime sales">
-            {stats ? `${stats.totalSales} (${ethers.formatUnits(stats.totalVolumeWei, 'ether')} ETH volume)` : '…'}
+            {stats ? `${stats.totalSales} (${formatEth(stats.totalVolumeWei) ?? '—'} ETH volume)` : '…'}
           </FactRow>
         </Section>
 
@@ -245,7 +244,7 @@ export default function AboutPage() {
           <div className="border-t border-gray-100 pt-4">
             <p className="text-sm text-gray-500 mb-3">
               Each function fires an <span className="font-semibold">event</span> — a permanent log entry on the
-              blockchain. The backend indexer rebuilds this whole marketplace just by reading these three
+              blockchain. The backend indexer rebuilds this whole marketplace just by reading these events
               (the hex value is the event's keccak-256 signature, as it appears in raw transaction logs):
             </p>
             <div className="space-y-2 text-sm">

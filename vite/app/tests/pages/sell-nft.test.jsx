@@ -8,24 +8,18 @@
 //  a wallet only the connect prompt; the form filled three
 //  ways — a tap on one of the student's unlisted NFTs (the
 //  listed one left out), the detail page's prefilled query
-//  string with its notice, or by hand; the fields refused
-//  together when one is empty; the whole flow against the
-//  MetaMask and Sepolia doubles, the listing asked only once
-//  the approval is mined, either popup declined; and the
-//  proceeds card — the student's unwithdrawn earnings read
-//  from the contract, withdrawn in one transaction, or "No
+//  string with its notice, or by hand; the fields named by
+//  their labels; the fields refused together when one is
+//  empty, and a price refused before any popup when it is not
+//  above zero or finer than ether's 18 decimals; the whole
+//  flow against the MetaMask and Sepolia doubles, the listing
+//  asked only once the approval is mined — never after an
+//  approval that reverted, nor while the relay cannot confirm
+//  it, each said in a toast — either popup declined; and the
+//  proceeds card — the connected account's unwithdrawn
+//  earnings read from the contract, withdrawn in one
+//  transaction and read again once it is mined, or "No
 //  proceeds to withdraw yet".
-//
-//  Pinned: the fields' labels are not tied to the fields; a
-//  zero or negative price spends an approval before anything
-//  refuses it; a price with more decimals than ether has
-//  escapes as an unhandled rejection, leaving the form
-//  silent; the approval's receipt is never read — a reverted
-//  approval is "confirmed" and the listing that follows is
-//  "listed"; with the relay down the page waits for the
-//  approval for ever; the proceeds card keeps showing what
-//  was withdrawn, and the amount of an account switched away
-//  from.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
@@ -33,7 +27,6 @@ import { screen, act, waitFor, fireEvent } from '@testing-library/react';
 import { renderPage } from '../support/render';
 import { given } from '../support/backend/server';
 import { settle } from '../support/backend/contract';
-import { catchUnhandledRejections } from '../support/setup';
 import { toastSaying, toasts } from '../support/toasts';
 import * as f from '../support/backend/fixtures';
 import { sepolia } from '../support/chain/sepolia';
@@ -51,6 +44,9 @@ const WAITING = 'Waiting for approval to be confirmed on blockchain...';
 const APPROVED = 'Approval confirmed! Now listing your NFT...';
 const CONFIRM_LISTING = 'Please confirm the listing transaction in your wallet';
 const LISTED = 'Your NFT has been listed! It appears once the indexer scans the block (~30 s).';
+const ABOVE_ZERO = 'Please enter a price greater than 0!';
+const APPROVAL_REVERTED = 'The approval reverted on-chain — check that this NFT is yours. Nothing was listed.';
+const APPROVAL_UNCONFIRMED = 'Could not confirm the approval — the chain cannot be read right now. Check the transaction on Etherscan before listing again.';
 
 const WITHDRAWN = 'Proceeds withdrawn successfully!';
 
@@ -68,8 +64,8 @@ const WITHDRAWN = 'Proceeds withdrawn successfully!';
 // unless the test brings a query string) for a returning
 // student, and waits for the form; the MetaMask double comes
 // back with the view. The fields are found by their
-// placeholders (their labels are not tied to them — pinned);
-// fill types into whichever the test names; list submits.
+// placeholders; fill types into whichever the test names;
+// list submits.
 // sentCalls reads the transactions MetaMask sent, decoded.
 // -----------------------------------------------------------
 
@@ -167,9 +163,11 @@ describe('The form', () => {
   });
 
 
-  it.fails('names its fields for assistive tech — PINNED KNOWN BUG: the <label>s are not tied to the inputs (no htmlFor / id)', async () => {
+  it('names its fields for assistive tech by their labels', async () => {
     await renderSell();
     expect(screen.getByLabelText('NFT Address')).toBe(addressField());
+    expect(screen.getByLabelText('Token ID')).toBe(tokenIdField());
+    expect(screen.getByLabelText('Price (in ETH)')).toBe(priceField());
   });
 });
 
@@ -311,59 +309,54 @@ describe('Listing', () => {
   });
 
 
-  it.fails('refuses a zero price before the wallet is asked — PINNED KNOWN BUG: "0" passes the form\'s check, the approval is spent and the listing reverts on-chain', async () => {
+  it.each([
+    ['zero', '0'],
+    ['negative', '-1'],
+  ])('refuses a %s price before the wallet is asked — the contract would refuse it only after the approval was paid for', async (_, price) => {
     const { user, metamask } = await renderSell();
-    await fill(user, { address: f.PUGS, tokenId: '3', price: '0' });
+    await fill(user, { address: f.PUGS, tokenId: '3', price });
     await list(user);
-    await settle(1500);
+    expect(await toastSaying(ABOVE_ZERO)).toBeInTheDocument();
+    await settle(300);
     expect(metamask.callsTo('eth_sendTransaction')).toEqual([]);
   });
 
 
-  it.fails('refuses a negative price before the wallet is asked — PINNED KNOWN BUG: the approval is sent and mined, then the listing fails to encode', async () => {
+  it('refuses a price with more decimals than ether holds in ethers\' own words, before the wallet is asked', async () => {
     const { user, metamask } = await renderSell();
-    await fill(user, { address: f.PUGS, tokenId: '3', price: '-1' });
-    await list(user);
-    await settle(1500);
-    expect(metamask.callsTo('eth_sendTransaction')).toEqual([]);
-  });
-
-
-  it.fails('says a price has more decimals than ether holds — PINNED KNOWN BUG: parseUnits throws outside the try, the form stays silent and the rejection escapes unhandled', async () => {
-    const escaped = catchUnhandledRejections();
-    const { user } = await renderSell();
     await fill(user, { address: f.PUGS, tokenId: '3' });
 
     // Typed key by key, user-event hands a number field's tiny
     // value on as "1e-19"; a browser passes the digits as typed
     fireEvent.change(priceField(), { target: { value: '0.0000000000000000001' } });
     await list(user);
-    await waitFor(() => expect(escaped).toHaveLength(1));
-    expect(toasts()).not.toEqual([]);
+    expect(await toastSaying('too many decimals for format')).toBeInTheDocument();
+    expect(metamask.callsTo('eth_sendTransaction')).toEqual([]);
   });
 
 
-  it.fails('tells the student when the approval reverted on-chain — PINNED KNOWN BUG: the receipt\'s status is never read, a reverted approval is "confirmed" and the reverted listing after it "listed"', async () => {
-    const { user } = await renderSell();
+  it('stops when the approval reverted on-chain — says so, and asks for no listing', async () => {
+    const { user, metamask } = await renderSell();
 
     // PUG #0 is the classmate's — the student cannot approve it
     await fill(user, { address: f.PUGS, tokenId: '0', price: '0.25' });
     await list(user);
-    await waitFor(() => expect(sepolia.transactions[0]?.receipt?.status).toBe('0x0'));
-    await settle(500);
+    expect(await toastSaying(APPROVAL_REVERTED)).toBeInTheDocument();
+    expect(sepolia.transactions[0].receipt.status).toBe('0x0');
+    await settle(300);
     expect(screen.queryByText(APPROVED)).toBeNull();
+    expect(sentCalls(metamask).map((call) => call.functionName)).toEqual(['approve']);
   });
 
 
-  it.fails('tells the student when the approval cannot be confirmed — PINNED KNOWN BUG: the wait never settles with the relay down, the page waits for ever while ethers\' failure escapes unhandled', async () => {
-    catchUnhandledRejections();
+  it('says when the approval cannot be confirmed with the relay down — rather than waiting for ever', async () => {
     const { user, metamask } = await renderSell();
-    given.json('post', '/api/rpc', { error: 'RPC relay failed: Read timed out.' }, { status: 502 });
+    given.json('post', '/api/rpc', { error: 'RPC relay failed: the RPC provider did not answer in time' }, { status: 502 });
     await fill(user, { address: f.PUGS, tokenId: '3', price: '0.25' });
     await list(user);
-    await waitFor(() => expect(metamask.sent).toHaveLength(1));
-    await settle(3000);
-    expect(toasts().filter((toast) => ![CONFIRM_APPROVAL, WAITING].includes(toast))).not.toEqual([]);
+    expect(await screen.findByText(APPROVAL_UNCONFIRMED, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(sentCalls(metamask).map((call) => call.functionName)).toEqual(['approve']);
+    expect(toasts()).not.toContain(APPROVED);
   });
 });
 
@@ -417,16 +410,17 @@ describe('Proceeds', () => {
   });
 
 
-  it.fails('stops offering what was withdrawn — PINNED KNOWN BUG: the proceeds are never read again, the card keeps offering them', async () => {
+  it('stops offering what was withdrawn — the proceeds read again once the withdrawal is mined', async () => {
     const { user } = await renderSell();
     await user.click(await screen.findByRole('button', { name: 'Withdraw Now' }));
     await toastSaying(WITHDRAWN);
-    await settle(500);
+    expect(proceedsLine()).toHaveTextContent('Withdraw 0.0 ETH proceeds');
+    expect(screen.getByText('No proceeds to withdraw yet')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Withdraw Now' })).toBeNull();
   });
 
 
-  it.fails('shows the proceeds of another account picked in MetaMask — PINNED KNOWN BUG: an account without proceeds reads 0n, which the page skips, keeping the last account\'s amount', async () => {
+  it('shows the proceeds of another account picked in MetaMask — an account without any reads 0', async () => {
     const { metamask } = await renderSell({ accounts: [f.STUDENT, f.OTHER_ACCOUNT] });
     await waitFor(() => expect(proceedsLine()).toHaveTextContent('Withdraw 0.03 ETH proceeds'));
     act(() => metamask.changeAccounts([f.OTHER_ACCOUNT]));

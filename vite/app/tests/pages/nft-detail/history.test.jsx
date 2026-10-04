@@ -8,13 +8,12 @@
 //  otherwise — its transaction one click away, the block time
 //  in the student's zone with the block, and the price when
 //  the event carries one; a skeleton while it loads, a line
-//  when there is no story yet. Under it the IPFS archive: the
-//  pinner's verdict on each of the token's files — its kind,
-//  its CID shortened with the full one on hover, its status —
-//  and no card at all for a token the pinner never saw.
-//
-//  Pinned: an event type the page does not know is shown as a
-//  cancellation.
+//  when there is no story yet; an event type the page does not
+//  know shown under its own name, never as a cancellation.
+//  Under it the IPFS archive: the pinner's verdict on each of
+//  the token's files — its kind, its CID shortened with the
+//  full one on hover, its status — and no card at all for a
+//  token the pinner never saw.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
@@ -109,13 +108,14 @@ describe('The timeline', () => {
   });
 
 
-  it.fails('marks an event type it does not know for what it is — PINNED KNOWN BUG: any unknown type is drawn as "Cancelled"', async () => {
+  it('marks an event type it does not know for what it is — under its own name, never as a cancellation', async () => {
     given.json('get', '/api/nft/:nftAddress/:tokenId', {
       ...f.nft(f.PUGS, '0'),
       events: [{ blockNumber: 9712990, buyer: null, price: null, seller: f.SELLER, timestamp: f.timeOf(9712990), txHash: f.TX.art0Listed, type: 'Transferred' }],
     });
     renderDetail(f.PUGS, '0');
     await timelineLoaded();
+    expect(within(panel('Transaction History')).getByText('Transferred')).toBeInTheDocument();
     expect(within(panel('Transaction History')).queryByText('Cancelled')).toBeNull();
   });
 });

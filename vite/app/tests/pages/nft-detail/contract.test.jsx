@@ -7,22 +7,19 @@
 //  button, the timeline and the archive — and the page's other
 //  two sources failing on their own: the IPFS gateway gone
 //  (the token diagnosed as unreachable, everything else in
-//  place) and the RPC relay gone.
-//
-//  Pinned: a failed backend read passes for a token that was
-//  never traded ("not currently for sale", "No transaction
-//  history yet"); an answer of the wrong shape crashes the
-//  page (App.jsx has no error boundary — a blank page); with
-//  the relay down the token is blamed — its owner "unknown
-//  (ownerOf reverted)", its tokenURI "reverts on-chain".
+//  place) and the RPC relay gone — said as such, the token
+//  never blamed. A failed backend read is said where the
+//  history would be, and never passes for a token that was
+//  never traded; an answer of the wrong shape never crashes
+//  the page.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { given } from '../../support/backend/server';
-import { describeEndpointContract, settle, variantNames } from '../../support/backend/contract';
-import { renderDetail, stripes } from '../../support/nft-detail/page';
-import { DIAGNOSES } from '../../support/diagnoses';
+import { describeEndpointContract } from '../../support/backend/contract';
+import { renderDetail, stripes, infoRow } from '../../support/nft-detail/page';
+import { DIAGNOSES, UNREADABLE } from '../../support/diagnoses';
 import * as f from '../../support/backend/fixtures';
 
 
@@ -51,13 +48,16 @@ describe('The other sources failing', () => {
   });
 
 
-  it.fails('does not blame the token when the RPC relay is gone — PINNED KNOWN BUG: the page says its owner is "unknown (ownerOf reverted)" and diagnoses "tokenURI() reverts on-chain"', async () => {
-    given.json('post', '/api/rpc', { error: 'RPC relay failed: Read timed out.' }, { status: 502 });
+  it('does not blame the token when the RPC relay is gone — the chain cannot be read, and the page says so', async () => {
+    given.json('post', '/api/rpc', { error: 'RPC relay failed: the RPC provider did not answer in time' }, { status: 502 });
     renderDetail(f.PUGS, '0');
     await screen.findByText('Price updated');
-    await settle(2000);
+    expect(await screen.findByRole('heading', { level: 3, name: `⚠ ${UNREADABLE.title}` }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText(UNREADABLE.message)).toBeInTheDocument();
+    expect(await within(infoRow('Current Owner:')).findByText('unknown (the chain cannot be read right now)', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByText('unknown (ownerOf reverted)')).toBeNull();
     expect(screen.queryByText(DIAGNOSES.revert.message)).toBeNull();
+    expect(screen.queryByRole('heading', { level: 3, name: PROBLEM })).toBeNull();
   });
 });
 
@@ -71,12 +71,10 @@ describe('The other sources failing', () => {
 // Backend contract
 // -----------------------------------------------------------
 //
-// The page has no failure presentation of its own: a failed
-// read must at least not pass for a token that was never
-// traded — it does (pinned).
+// A failed read is "Error: <the message>" where the history
+// would be, and the actions say the listing is unknown — it
+// never passes for a token that was never traded.
 // -----------------------------------------------------------
-
-const NEVER_TRADED = 'a failed read passes for a token never traded — "not currently for sale", "No transaction history yet"';
 
 describeEndpointContract({
   path: '/api/nft/:nftAddress/:tokenId',
@@ -89,14 +87,10 @@ describeEndpointContract({
   },
   failed: async (message) => {
     await screen.findByRole('heading', { level: 3, name: 'Actions' });
-    await settle(100);
+    expect(await screen.findByText(`Error: ${message}`)).toBeInTheDocument();
+    expect(screen.getByText('Whether this NFT is for sale could not be loaded')).toBeInTheDocument();
     expect(screen.queryByText('No transaction history yet')).toBeNull();
-    expect(await screen.findByText(message, { exact: false }, { timeout: 1500 })).toBeInTheDocument();
+    expect(screen.queryByText('This NFT is not currently for sale')).toBeNull();
   },
   loading: () => screen.getByRole('heading', { level: 3, name: 'Transaction History' }) && !screen.queryByText('No transaction history yet'),
-  pins: {
-    ...Object.fromEntries(variantNames('failed').map((name) => [name, NEVER_TRADED])),
-    'types swapped (numbers as strings, strings as numbers) → page survives': 'a CID that is no string crashes the page — cid.slice on a number',
-    'hostile strings (unicode + markup) → rendered as text, never as elements': 'a price that is no number crashes the page — ethers.formatUnits throws while rendering',
-  },
 });

@@ -8,11 +8,9 @@
 //  student between pages, and the browser's Back too; each
 //  route asking the backend for what its page shows and
 //  nothing more; the shared toast outlet — a success toast up
-//  for ten seconds, an error for fifteen.
-//
-//  Pinned: there is no catch-all route — a mistyped address
-//  leaves the main area empty instead of saying the page does
-//  not exist.
+//  for ten seconds, an error for fifteen; and an address no
+//  route knows, said not to exist — naming the address, with
+//  the way back to the marketplace.
 // -----------------------------------------------------------
 
 import { describe, it, expect, vi } from 'vitest';
@@ -84,10 +82,12 @@ describe('The shell', () => {
   });
 
 
-  it.fails('says the page does not exist for an address no route knows — PINNED KNOWN BUG: App.jsx has no catch-all route, the main area stays empty', async () => {
-    renderApp({ route: '/no/such/page' });
-    await settle(100);
-    expect(main()).not.toBeEmptyDOMElement();
+  it('says the page does not exist for an address no route knows — naming the address, with the way back', async () => {
+    const { user } = renderApp({ route: '/no/such/page' });
+    expect(await pageHeading('Page not found')).toBeInTheDocument();
+    expect(within(main()).getByText('/no/such/page')).toBeInTheDocument();
+    await user.click(within(main()).getByRole('link', { name: '← Back to Marketplace' }));
+    expect(await within(main()).findByText('Please connect your wallet to browse the marketplace')).toBeInTheDocument();
   });
 });
 

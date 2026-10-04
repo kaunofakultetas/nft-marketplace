@@ -12,20 +12,19 @@
 //  id, every other token "Not for sale", all of them the
 //  student's — Refresh, the backend's failure word for word
 //  with Try Again, the empty wallet's way to the marketplace,
-//  another account picked in MetaMask. And the backend
-//  contract matrices of /api/my-nfts/<wallet> and
-//  /api/listings.
-//
-//  Pinned: a holdings answer whose list is no list crashes
-//  the page; a failed listings read shows the student's listed
-//  NFT as "Not for sale".
+//  another account picked in MetaMask; a holdings answer
+//  whose list is no list read as holding none. And the
+//  backend contract matrices of /api/my-nfts/<wallet> and
+//  /api/listings — a failed listings read said above the
+//  grid, every price "unknown", never a listed NFT called
+//  "Not for sale".
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
 import { screen, act } from '@testing-library/react';
 import { renderPage } from '../support/render';
 import { given, url } from '../support/backend/server';
-import { describeEndpointContract, settle, variantNames } from '../support/backend/contract';
+import { describeEndpointContract, settle } from '../support/backend/contract';
 import { LocationProbe, currentPath } from '../support/shell/router';
 import * as f from '../support/backend/fixtures';
 import { installMetamask } from '../support/wallets/metamask';
@@ -33,7 +32,7 @@ import MyNftsPage from '@/pages/MyNfts/Page';
 
 
 const CONNECT = 'Please connect your wallet to view your NFTs';
-const ETHERSCAN_DOWN = 'Etherscan request failed: 503 Server Error: Service Unavailable for url: https://api.etherscan.io/v2/api';
+const ETHERSCAN_DOWN = 'Etherscan request failed: Etherscan answered HTTP 503';
 
 // The student's three NFTs as their cards show them: PUG #1
 // listed at 0.1 ETH, PUG #3 and the wrongly minted ART #2
@@ -189,11 +188,10 @@ describe('The wallet\'s NFTs', () => {
   });
 
 
-  it.fails('survives a holdings answer whose list is no list — PINNED KNOWN BUG: an object for the list passes the empty check and .map crashes the page', async () => {
+  it('reads a holdings answer whose list is no list as holding none', async () => {
     given.json('get', '/api/my-nfts/:wallet', { nfts: {} });
     renderMyNfts();
-    await heading();
-    await settle(300);
+    expect(await screen.findByText('You don\'t own any NFTs yet')).toBeInTheDocument();
     expect(screen.queryByTestId('render-crashed')).toBeNull();
   });
 });
@@ -265,8 +263,8 @@ describe('An empty wallet, a failure, another account', () => {
 // /api/my-nfts/<wallet> feeds the grid — its failures are
 // shown as "Error: <the message>" with Try Again. /api/listings
 // only adds the prices: when it fails the cards still stand,
-// but the student's listed NFT must not be called unlisted —
-// it is (pinned).
+// the page says the prices are unknown and why, and no card —
+// the student's listed NFT least of all — is called unlisted.
 // -----------------------------------------------------------
 
 describeEndpointContract({
@@ -289,11 +287,10 @@ describeEndpointContract({
   render: () => renderMyNfts(),
   chrome: () => screen.getByRole('heading', { level: 1, name: 'My NFTs' }),
   loaded: async () => { await cardsLoaded(); await screen.findByText('0.1 ETH'); },
-  failed: async () => {
+  failed: async (message) => {
     await cardsLoaded();
-    await settle(100);
-    expect(cards()[0]).toEqual(['PUG', '0.1 ETH']);
+    expect(await screen.findByText(`The marketplace listings could not be loaded, so the prices are unknown: ${message}`)).toBeInTheDocument();
+    expect(cards()).toEqual([['PUG', 'Price unknown'], ['PUG', 'Price unknown'], ['NFT #2', 'Price unknown']]);
   },
   loading: () => screen.getAllByText('Not for sale'),
-  pins: Object.fromEntries(variantNames('failed').map((name) => [name, 'a failed listings read shows the student\'s listed NFT as "Not for sale"'])),
 });

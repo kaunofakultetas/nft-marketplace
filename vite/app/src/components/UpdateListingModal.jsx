@@ -6,11 +6,22 @@
 //  field starts empty; submitting without a positive price is
 //  rejected client-side before any wallet popup.
 //
+//  The page keeps the modal mounted while the token is listed
+//  and only toggles it, so everything the modal holds lives
+//  in its body, which is mounted only while the modal shows:
+//  a price typed before closing never outlives the closing,
+//  and what the field shows is always what is sent.
+//
+//  Split into (root component last):
+//
+//    ListingManager     — the modal's body and its two actions
+//    UpdateListingModal — shows the body or nothing (default export)
+//
 //  Used by:
 //    - pages/NftDetail — the "Update Listing / Cancel" button
 // -----------------------------------------------------------
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { useWriteContract } from 'wagmi';
 import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
@@ -24,22 +35,28 @@ import { formatWalletError } from '@/utils/format';
 
 
 // -----------------------------------------------------------
-// UpdateListingModal (default export)
+// ListingManager
 // -----------------------------------------------------------
 //
+// The visible modal: the price field (its label tied to it)
+// and the update, cancel and close buttons. Each wallet
+// action toasts its outcome and closes the modal on success;
+// a failure keeps it open with the price still in the field.
+//
 // Used by:
-//   - pages/NftDetail — the "Update Listing / Cancel" button
+//   - UpdateListingModal (below)
 // -----------------------------------------------------------
 
-export default function UpdateListingModal({ nftAddress, tokenId, isVisible, marketplaceAddress, onClose }) {
+function ListingManager({ nftAddress, tokenId, marketplaceAddress, onClose }) {
 
   const { writeContractAsync: updateContract } = useWriteContract();
   const { writeContractAsync: cancelContract } = useWriteContract();
-  const [priceToUpdateListingWith, setPriceToUpdateListingWith] = useState(0);
+  const [priceToUpdateListingWith, setPriceToUpdateListingWith] = useState('');
+  const priceFieldId = useId();
 
 
   const updateListingFunction = async () => {
-    if (priceToUpdateListingWith <= 0) {
+    if (!(priceToUpdateListingWith > 0)) {
       alert('Please enter a price greater than 0!');
       return;
     }
@@ -48,12 +65,11 @@ export default function UpdateListingModal({ nftAddress, tokenId, isVisible, mar
         address: marketplaceAddress,
         abi: nftMarketplaceAbi,
         functionName: 'updateListing',
-        args: [nftAddress, tokenId, ethers.parseEther(priceToUpdateListingWith || '0')],
+        args: [nftAddress, tokenId, ethers.parseEther(priceToUpdateListingWith)],
       });
 
       toast.success('Listing updated! The new price shows once the indexer scans the block (~30 s).');
       onClose && onClose();
-      setPriceToUpdateListingWith('0');
     } catch (error) {
       console.log('Update Listing Error:', error);
       toast.error(formatWalletError(error, 'Failed to update listing'));
@@ -79,9 +95,6 @@ export default function UpdateListingModal({ nftAddress, tokenId, isVisible, mar
   };
 
 
-  if (!isVisible) return null;
-
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
@@ -99,14 +112,16 @@ export default function UpdateListingModal({ nftAddress, tokenId, isVisible, mar
 
         {/* Update price section */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor={priceFieldId} className="block text-sm font-medium text-gray-700 mb-2">
             Update Listing Price (ETH)
           </label>
           <input
+            id={priceFieldId}
             type="number"
             step="0.001"
             min="0"
             placeholder="Enter new price in ETH"
+            value={priceToUpdateListingWith}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             onChange={(event) => {
               setPriceToUpdateListingWith(event.target.value);
@@ -141,4 +156,26 @@ export default function UpdateListingModal({ nftAddress, tokenId, isVisible, mar
       </div>
     </div>
   );
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// UpdateListingModal (default export)
+// -----------------------------------------------------------
+//
+// Used by:
+//   - pages/NftDetail — the "Update Listing / Cancel" button
+// -----------------------------------------------------------
+
+export default function UpdateListingModal({ isVisible, ...listing }) {
+
+  if (!isVisible) return null;
+
+
+  return <ListingManager {...listing} />;
 }

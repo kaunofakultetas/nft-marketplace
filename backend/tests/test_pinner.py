@@ -11,12 +11,14 @@
 #               tokenURI read and its ABI string decoded
 #    outcomes — a healthy token's metadata and image pinned by
 #               their ROOT CIDs; a file not on IPFS 'skipped'
-#               with its URI; metadata that is not JSON, or
-#               names no "image" (the non-standard "image_url"
-#               not honoured), 'invalid' for good; a token
-#               whose tokenURI reverts, or whose file nobody
-#               serves, 'pending' and retried every cycle until
-#               the attempt cap makes it 'unreachable'
+#               with its URI; metadata that is no JSON object,
+#               or names no "image" text (the non-standard
+#               "image_url" not honoured), 'invalid' for good;
+#               a token whose tokenURI reverts, or whose file
+#               nobody serves, 'pending' and retried every
+#               cycle until the attempt cap makes it
+#               'unreachable' — the row naming the file it
+#               could not get, URI and root CID
 #    rescue   — a CID the p2p network cannot deliver fetched
 #               from the public gateway caches as a verified
 #               CAR, imported, proven local, then pinned — the
@@ -24,7 +26,9 @@
 #               ending the search
 #    work     — an archived token costs nothing, a token never
 #               tried goes first, a previous contract's
-#               unfinished pins are still retried, and the
+#               unfinished pins are still retried, one token's
+#               failure — wrongly minted metadata of any shape
+#               included — never stops the others, and the
 #               loop survives its own failures
 ############################################################
 
@@ -44,6 +48,7 @@ PUG_IMAGE_CID = 'QmSsYRx3LpDAb1GZQm7zZ1AuHZjfbPkD6J7s9r41xu1mf8'
 ART_DIR = 'bafybei2kpehdmoemeamafvd7sbjdz5ycbvj7kq4ogpjm7eyobzzjjliius'
 ART_1_IMAGE_CID = 'bafkreiyho67dkx3htkufgo5el2fubvoju36abw2vywisxwxyln7veddtn5'
 LOST_DIR = 'bafybeisnhq2afc2rkc62zzi44qrg73v4grjuexjo75cstwp6pobpk4lfyk'
+BAD_DIR = 'bafybeibadmetadataxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 
 PUG_TOKEN_URI = f'ipfs://{PUG_JSON_CID}/?filename=0-PUG.json'
 PUG_IMAGE_URI = f'https://ipfs.io/ipfs/{PUG_IMAGE_CID}?filename=pug.png'
@@ -266,7 +271,7 @@ class OutcomeTests(PinnerTestCase):
                 printed = self.sync()
                 self.assertEqual(self.rows(helpers.ART, token_id)['image'],
                                  {'Uri': '', 'Cid': None, 'Status': 'invalid', 'Attempts': 1})
-                self.assertIn(f'[pinner] invalid metadata of {helpers.ART}#{token_id}: not JSON or no "image" field', printed)
+                self.assertIn(f'[pinner] invalid metadata of {helpers.ART}#{token_id}: no JSON object with an "image" text', printed)
 
     def test_a_tokenuri_that_is_an_image_still_has_that_image_archived_as_its_metadata(self):
         self.trade(helpers.ART, 1)
@@ -282,14 +287,15 @@ class OutcomeTests(PinnerTestCase):
         self.trade(helpers.ART, 5)
         self.sync()
         self.sync()
-        self.assertEqual(self.rows(helpers.ART, 5)['metadata'], {'Uri': '', 'Cid': None, 'Status': 'pending', 'Attempts': 2})
+        self.assertEqual(self.rows(helpers.ART, 5)['metadata'],
+                         {'Uri': TOKEN_URIS[(helpers.ART, 5)], 'Cid': LOST_DIR, 'Status': 'pending', 'Attempts': 2})
 
     def test_the_attempt_cap_makes_a_lost_file_unreachable(self):
         self.trade(helpers.ART, 5)
         self.seed_pin(helpers.ART, 5, 'metadata', 'pending', attempts=main.PIN_MAX_ATTEMPTS - 1)
         printed = self.sync()
-        self.assertEqual(self.rows(helpers.ART, 5)['metadata']['Status'], 'unreachable')
-        self.assertEqual(self.rows(helpers.ART, 5)['metadata']['Attempts'], main.PIN_MAX_ATTEMPTS)
+        self.assertEqual(self.rows(helpers.ART, 5)['metadata'],
+                         {'Uri': TOKEN_URIS[(helpers.ART, 5)], 'Cid': LOST_DIR, 'Status': 'unreachable', 'Attempts': main.PIN_MAX_ATTEMPTS})
         self.assertIn(f'[pinner] gave up on metadata of {helpers.ART}#5', printed)
 
     def test_an_unreadable_metadata_file_leaves_the_image_pending_until_the_cap(self):
@@ -303,12 +309,72 @@ class OutcomeTests(PinnerTestCase):
         self.sync()
         self.assertEqual(self.rows(helpers.PUGS, 1)['image']['Status'], 'unreachable')
 
-    def test_an_image_nobody_serves_is_pending_with_its_uri(self):
+    def test_an_image_nobody_serves_is_pending_and_named_in_its_row(self):
         self.trade(helpers.PUGS, 0)
         self.use_kubo(network={PUG_JSON_CID})
         self.sync()
         self.assertEqual(self.rows(helpers.PUGS, 0)['image'],
-                         {'Uri': PUG_IMAGE_URI, 'Cid': None, 'Status': 'pending', 'Attempts': 1})
+                         {'Uri': PUG_IMAGE_URI, 'Cid': PUG_IMAGE_CID, 'Status': 'pending', 'Attempts': 1})
+
+
+
+
+
+
+
+
+############################################################
+# MalformedMetadataTests
+############################################################
+#
+# Metadata that IS valid JSON, but no object with an "image"
+# text — and a token waiting behind it: ART #9, freshly
+# listed, holds the bad file of each test; PUG #0's metadata
+# has been pending for three cycles and is finally served,
+# sorting after the bad token from the second cycle on. The
+# cycles run the way the daemon runs them: one that throws
+# is logged and the next starts afresh.
+############################################################
+
+class MalformedMetadataTests(PinnerTestCase):
+
+    def world(self, bad_metadata):
+        self.etherscan = helpers.FakeEtherscan(token_uris={
+            (helpers.ART, 9): f'ipfs://{BAD_DIR}/9.json',
+            (helpers.PUGS, 0): PUG_TOKEN_URI,
+        })
+        self.pinner = Pinner(self.etherscan)
+        self.use_kubo(network={BAD_DIR, PUG_JSON_CID, PUG_IMAGE_CID},
+                      files={f'{BAD_DIR}/9.json': bad_metadata, PUG_JSON_CID: FILES[PUG_JSON_CID]})
+        self.trade(helpers.ART, 9)
+        self.trade(helpers.PUGS, 0)
+        self.seed_pin(helpers.PUGS, 0, 'metadata', 'pending', attempts=3)
+
+    def assert_invalid_and_the_archive_goes_on(self):
+        for _ in range(3):
+            with self.kubo.patched(), helpers.quiet():
+                try:
+                    self.pinner._sync()
+                except Exception:
+                    pass
+        self.assertEqual(self.rows(helpers.ART, 9)['image'], {'Uri': '', 'Cid': None, 'Status': 'invalid', 'Attempts': 1})
+        self.assertEqual(self.rows(helpers.PUGS, 0)['metadata']['Status'], 'pinned')
+
+    def test_metadata_that_is_a_json_list(self):
+        self.world(b'["PUG", "ipfs://somewhere/pug.png"]')
+        self.assert_invalid_and_the_archive_goes_on()
+
+    def test_metadata_that_is_a_json_string(self):
+        self.world(b'"ipfs://somewhere/pug.png"')
+        self.assert_invalid_and_the_archive_goes_on()
+
+    def test_metadata_that_is_json_null(self):
+        self.world(b'null')
+        self.assert_invalid_and_the_archive_goes_on()
+
+    def test_an_image_field_that_is_no_text(self):
+        self.world(json.dumps({'name': 'Numbered', 'image': 5}).encode())
+        self.assert_invalid_and_the_archive_goes_on()
 
 
 
@@ -433,6 +499,24 @@ class WorkTests(PinnerTestCase):
         self.sync()
         self.assertEqual([call[0] for call in self.etherscan.called('eth_call')], [helpers.PUGS, helpers.ART, helpers.ART])
         self.assertEqual([int(call[1][10:], 16) for call in self.etherscan.called('eth_call')], [0, 6, 5])
+
+    def test_one_tokens_failure_never_stops_the_others(self):
+        # The database refusing ART #7's row, the first in line:
+        # the cycle says so and moves on to PUG #0
+        self.trade(helpers.ART, 7)
+        self.trade(helpers.PUGS, 0)
+        self.seed_pin(helpers.PUGS, 0, 'metadata', 'pending', attempts=3)
+        record = self.pinner._record
+
+        def refusing(nft_address, *args):
+            if nft_address == helpers.ART:
+                raise helpers.sqlite_error()
+            return record(nft_address, *args)
+
+        self.pinner._record = refusing
+        printed = self.sync()
+        self.assertEqual(self.rows(helpers.PUGS, 0)['metadata']['Status'], 'pinned')
+        self.assertIn(f'[pinner] error on {helpers.ART}#7: database is locked — retrying next cycle', printed)
 
     def test_a_previous_contracts_unfinished_pins_are_still_retried(self):
         # The contract switch wiped the events; the pending row is

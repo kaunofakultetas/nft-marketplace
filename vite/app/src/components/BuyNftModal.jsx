@@ -3,18 +3,20 @@
 //
 //  Confirming calls buyListing on the marketplace with the
 //  listing price as msg.value. The wallet popup does the real
-//  waiting — the modal only fires the transaction and toasts
-//  the submission result.
+//  waiting — the modal only fires the transaction, toasts the
+//  submission result and closes once the purchase is on its
+//  way. OK is disabled while the wallet's confirmation is
+//  open: a second click would queue a second purchase.
 //
 //  Used by:
 //    - pages/NftDetail — the "Buy Now" button
 // -----------------------------------------------------------
 
+import { useState } from 'react';
 import { useWriteContract } from 'wagmi';
-import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
 import { nftMarketplaceAbi } from '@/constants';
-import { formatWalletError } from '@/utils/format';
+import { formatEth, formatWalletError } from '@/utils/format';
 
 
 
@@ -33,9 +35,11 @@ import { formatWalletError } from '@/utils/format';
 export default function BuyNftModal({ nftAddress, tokenId, isVisible, marketplaceAddress, onClose, price }) {
 
   const { writeContractAsync: buyNftFunc } = useWriteContract();
+  const [buying, setBuying] = useState(false);
 
 
   const buyListingFunction = async () => {
+    setBuying(true);
     try {
       await buyNftFunc({
         address: marketplaceAddress,
@@ -46,9 +50,12 @@ export default function BuyNftModal({ nftAddress, tokenId, isVisible, marketplac
       });
 
       toast.success('Successfully bought the NFT! The marketplace updates once the indexer scans the block (~30 s).');
+      onClose();
     } catch (error) {
       console.log('Buy Item Error:', error);
       toast.error(formatWalletError(error, 'Failed to buy NFT. Please try again.'));
+    } finally {
+      setBuying(false);
     }
   };
 
@@ -61,7 +68,7 @@ export default function BuyNftModal({ nftAddress, tokenId, isVisible, marketplac
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
 
         <p className="text-xl text-gray-950 font-semibold">
-          Are you sure you want to buy this NFT for {price ? ethers.formatUnits(price, 'ether') : '???'}{' '}
+          Are you sure you want to buy this NFT for {formatEth(price) ?? '???'}{' '}
           ETH?
         </p>
 
@@ -74,7 +81,8 @@ export default function BuyNftModal({ nftAddress, tokenId, isVisible, marketplac
           </button>
           <button
             onClick={buyListingFunction}
-            className="bg-[var(--color-primary)] text-white py-2 px-6 rounded-lg hover:bg-[var(--color-primary-hover)] font-semibold transition-colors"
+            disabled={buying}
+            className="bg-[var(--color-primary)] text-white py-2 px-6 rounded-lg hover:bg-[var(--color-primary-hover)] font-semibold transition-colors disabled:opacity-50 disabled:cursor-wait"
           >
             OK
           </button>

@@ -14,8 +14,10 @@
 //                            RELATIVE path (/api/rpc — the
 //                            backend's relay, so no provider
 //                            key ever reaches the browser)
-//                            resolved to absolute here
-//                            because ethers needs full URLs
+//                            resolved to absolute here, so
+//                            wagmi's transport is handed a
+//                            full URL; required — a config
+//                            without one is refused
 //    ipfsGateway           — IPFS gateway prefix (default /ipfs/)
 //    ipfsTimeout           — IPFS fetch timeout ms (default 10000)
 //
@@ -40,7 +42,9 @@ let config = null;
 //
 // Fetches /api/config and stores it with defaults applied;
 // throws on any network/HTTP/parse failure so the caller can
-// show the error screen.
+// show the error screen — and on an answer without an RPC
+// URL, which the URL constructor would otherwise quietly turn
+// into a path on this origin that every chain read then hits.
 //
 // Used by:
 //   - main.jsx — bootstrap(), before the first render
@@ -52,6 +56,9 @@ export async function loadConfig() {
     throw new Error(`GET /api/config failed: HTTP ${response.status}`);
   }
   const data = await response.json();
+  if (!data.rpcUrl) {
+    throw new Error('GET /api/config answered without an rpcUrl');
+  }
 
   config = {
     nftMarketplaceAddress: data.nftMarketplaceAddress,

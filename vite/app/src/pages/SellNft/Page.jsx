@@ -4,7 +4,12 @@
 //  Listing is TWO wallet transactions in sequence: approve the
 //  marketplace on the NFT contract, wait for that approval to
 //  confirm on-chain (listItem reverts without it), then
-//  listItem on the marketplace. Toasts narrate each step.
+//  listItem on the marketplace. Toasts narrate each step. The
+//  price is checked before any wallet popup — above zero, and
+//  no finer than ether's 18 decimals — and the approval's
+//  receipt is read: a reverted approval stops the listing,
+//  and a chain that cannot be read says so instead of leaving
+//  the student waiting for ever.
 //
 //  The form fills THREE ways, like a real marketplace with
 //  the machinery still visible: tap one of your unlisted
@@ -16,7 +21,8 @@
 //  Two white cards on the grey canvas: the listing form and,
 //  below it, the wallet's accumulated sale proceeds with a
 //  withdraw button (proceeds stay in the marketplace
-//  contract until pulled).
+//  contract until pulled) — read for whichever account is
+//  connected, and read again once a withdrawal is mined.
 //
 //  Split into (root component last):
 //
@@ -25,17 +31,26 @@
 //    SellNftPage    — form + proceeds cards (default export)
 // -----------------------------------------------------------
 
-import { useState, useEffect } from 'react';
+import { useState, useId } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAccount, useReadContract, useWriteContract } from 'wagmi';
+import { useAccount, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
 import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
 import { nftAbi, nftMarketplaceAbi } from '@/constants';
 import { getConfig } from '@/config';
 import { apiGet } from '@/utils/api';
-import { truncateAddress, formatWalletError } from '@/utils/format';
+import { waitForReceipt } from '@/utils/chain';
+import { truncateAddress, formatEth, formatWalletError } from '@/utils/format';
 import ConnectPrompt from '@/components/ConnectPrompt';
+
+
+// What the page says when a transaction it waits for cannot
+// be confirmed, or turns out reverted
+const APPROVAL_REVERTED = 'The approval reverted on-chain — check that this NFT is yours. Nothing was listed.';
+const APPROVAL_UNCONFIRMED = 'Could not confirm the approval — the chain cannot be read right now. Check the transaction on Etherscan before listing again.';
+const WITHDRAWAL_REVERTED = 'The withdrawal reverted on-chain — nothing was withdrawn.';
+const WITHDRAWAL_UNCONFIRMED = 'The withdrawal was sent, but cannot be confirmed — the chain cannot be read right now.';
 
 
 
@@ -47,17 +62,25 @@ import ConnectPrompt from '@/components/ConnectPrompt';
 // FormField
 // -----------------------------------------------------------
 //
+// One input with its label tied to it, so the label names
+// the field for assistive tech.
+//
 // Used by:
 //   - SellNftPage (below) — the three form inputs
 // -----------------------------------------------------------
 
 function FormField({ label, type, value, onChange, placeholder }) {
+
+  const id = useId();
+
+
   return (
     <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-2">
         {label}
       </label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -162,13 +185,13 @@ function OwnedNftPicker({ selectedKey, onPick }) {
 export default function SellNftPage() {
 
   const { isConnected, address: userAddress } = useAccount();
-  const { nftMarketplaceAddress, rpcUrl } = getConfig();
+  const publicClient = usePublicClient();
+  const { nftMarketplaceAddress } = getConfig();
   const [searchParams] = useSearchParams();
 
   const [nftAddress, setNftAddress] = useState(searchParams.get('nftAddress') || '');
   const [tokenId, setTokenId] = useState(searchParams.get('tokenId') || '');
   const [priceInput, setPriceInput] = useState('');
-  const [proceeds, setProceeds] = useState('0');
 
   const { writeContractAsync: approveNft } = useWriteContract();
   const { writeContractAsync: listNft } = useWriteContract();
@@ -177,19 +200,14 @@ export default function SellNftPage() {
   const prefilled = Boolean(searchParams.get('nftAddress') && searchParams.get('tokenId'));
 
 
-  const { data: returnedProceeds } = useReadContract({
+  // The connected account's proceeds as the contract has them
+  // — none (0) while they are still being read
+  const { data: proceeds = 0n, refetch: refetchProceeds } = useReadContract({
     address: nftMarketplaceAddress,
     abi: nftMarketplaceAbi,
     functionName: 'getProceeds',
     args: [userAddress],
   });
-
-
-  useEffect(() => {
-    if (returnedProceeds) {
-      setProceeds(returnedProceeds.toString());
-    }
-  }, [returnedProceeds]);
 
 
   // Approve, wait for on-chain confirmation, then list —
@@ -201,7 +219,21 @@ export default function SellNftPage() {
       toast.error('Please fill in all fields: NFT Address, Token ID, and Price');
       return;
     }
-    const price = ethers.parseUnits(priceInput, 'ether').toString();
+
+    // Checked before the wallet is asked for anything: the
+    // contract refuses a zero price only after the approval
+    // was paid for, and ethers refuses more than 18 decimals
+    let price;
+    try {
+      price = ethers.parseUnits(priceInput, 'ether');
+    } catch (error) {
+      toast.error(formatWalletError(error, 'Please enter a price in ETH.'));
+      return;
+    }
+    if (price <= 0n) {
+      toast.error('Please enter a price greater than 0!');
+      return;
+    }
 
     try {
       toast.loading('Please confirm the approval transaction in your wallet');
@@ -215,8 +247,18 @@ export default function SellNftPage() {
 
       toast.loading('Waiting for approval to be confirmed on blockchain...');
 
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-      await provider.waitForTransaction(approvalTxHash);
+      let receipt;
+      try {
+        receipt = await waitForReceipt(publicClient, approvalTxHash);
+      } catch (error) {
+        console.log('Approval Receipt Error:', error);
+        toast.error(APPROVAL_UNCONFIRMED);
+        return;
+      }
+      if (receipt.status !== 'success') {
+        toast.error(APPROVAL_REVERTED);
+        return;
+      }
 
       toast.success('Approval confirmed! Now listing your NFT...');
 
@@ -247,14 +289,31 @@ export default function SellNftPage() {
   };
 
 
+  // Withdraw, then read the proceeds again once the
+  // withdrawal is mined — the card must not keep offering
+  // what is gone
   const withdrawProceeds = async () => {
     try {
-      await withdrawProceedsFromContract({
+      const withdrawalTxHash = await withdrawProceedsFromContract({
         address: nftMarketplaceAddress,
         abi: nftMarketplaceAbi,
         functionName: 'withdrawProceeds',
       });
 
+      let receipt;
+      try {
+        receipt = await waitForReceipt(publicClient, withdrawalTxHash);
+      } catch (error) {
+        console.log('Withdrawal Receipt Error:', error);
+        toast.error(WITHDRAWAL_UNCONFIRMED);
+        return;
+      }
+      if (receipt.status !== 'success') {
+        toast.error(WITHDRAWAL_REVERTED);
+        return;
+      }
+
+      await refetchProceeds();
       toast.success('Proceeds withdrawn successfully!');
     } catch (error) {
       console.log('Withdraw Error:', error);
@@ -329,9 +388,9 @@ export default function SellNftPage() {
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
           <h3 className="text-xl font-bold mb-3">Proceeds</h3>
           <p className="text-gray-700 mb-4">
-            Withdraw {ethers.formatUnits(proceeds, 'ether')} ETH proceeds
+            Withdraw {formatEth(proceeds)} ETH proceeds
           </p>
-          {proceeds != '0' ? (
+          {proceeds > 0n ? (
             <button
               type="button"
               onClick={withdrawProceeds}

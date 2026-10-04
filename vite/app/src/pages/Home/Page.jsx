@@ -9,7 +9,8 @@
 //  cards from GET /api/listings. Without a connected wallet
 //  it only asks to connect — the cards need wallet context
 //  to read tokenURIs. An empty marketplace nudges towards
-//  /sell-nft.
+//  /sell-nft; a failed listings read says what went wrong
+//  where the grid would be.
 //
 //  Split into (root component last):
 //
@@ -22,11 +23,68 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
 import { Link } from 'react-router-dom';
-import { ethers } from 'ethers';
 import { apiGet } from '@/utils/api';
-import { etherscanAddressUrl, formatDateTime } from '@/utils/format';
+import { etherscanAddressUrl, formatDateTime, formatEth, parseWei } from '@/utils/format';
 import NFTBox from '@/components/NFTBox';
 import ConnectPrompt from '@/components/ConnectPrompt';
+
+
+// Sort orders for the grid — 'newest' keeps the backend's
+// ListedBlock DESC order
+const SORTERS = {
+  'newest': null,
+  'price-low': byPrice(1),
+  'price-high': byPrice(-1),
+};
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// inEth
+// -----------------------------------------------------------
+//
+// An amount as a stat tile shows it, in ether — a dash when
+// the answer carries none, or one that cannot be read.
+//
+// Used by:
+//   - StatsBar (below) — floor price and volume
+// -----------------------------------------------------------
+
+function inEth(wei) {
+  const ether = formatEth(wei);
+  return ether ? `${ether} ETH` : '—';
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// byPrice
+// -----------------------------------------------------------
+//
+// A comparator of two listings by price, low to high for a
+// direction of 1 and high to low for -1. Prices compare as
+// big integers — wei amounts overflow a JavaScript number —
+// and a price that cannot be read sorts last either way.
+//
+// Used by:
+//   - SORTERS (above)
+// -----------------------------------------------------------
+
+function byPrice(direction) {
+  return (a, b) => {
+    const [left, right] = [parseWei(a.price), parseWei(b.price)];
+    if (left === null || right === null) return (left === null) - (right === null);
+    return left === right ? 0 : (left < right ? -direction : direction);
+  };
+}
 
 
 
@@ -64,7 +122,8 @@ function StatTile({ label, value }) {
 // Floor / listed / sales / volume, plus the technical line:
 // the contract address linking to Etherscan and the last
 // block the backend indexer scanned — deliberately visible,
-// this is a teaching marketplace.
+// this is a teaching marketplace. An amount the answer does
+// not carry, or carries malformed, is a dash.
 //
 // Used by:
 //   - HomePage (below)
@@ -83,13 +142,10 @@ function StatsBar() {
   return (
     <div className="mb-8">
       <div className="flex flex-wrap gap-4">
-        <StatTile
-          label="Floor Price"
-          value={stats.floorPriceWei ? `${ethers.formatUnits(stats.floorPriceWei, 'ether')} ETH` : '—'}
-        />
+        <StatTile label="Floor Price" value={inEth(stats.floorPriceWei)} />
         <StatTile label="Listed" value={stats.activeListings} />
         <StatTile label="Sales" value={stats.totalSales} />
-        <StatTile label="Volume" value={`${ethers.formatUnits(stats.totalVolumeWei, 'ether')} ETH`} />
+        <StatTile label="Volume" value={inEth(stats.totalVolumeWei)} />
       </div>
 
       <div className="mt-2 text-xs text-gray-500">
@@ -112,16 +168,6 @@ function StatsBar() {
 }
 
 
-// Sort orders for the grid — 'newest' keeps the backend's
-// ListedBlock DESC order; prices compare as BigInt, wei
-// strings overflow Number
-const SORTERS = {
-  'newest': null,
-  'price-low': (a, b) => (BigInt(a.price) < BigInt(b.price) ? -1 : 1),
-  'price-high': (a, b) => (BigInt(a.price) > BigInt(b.price) ? -1 : 1),
-};
-
-
 
 
 
@@ -137,7 +183,7 @@ const SORTERS = {
 
 export default function HomePage() {
 
-  const { isLoading, data } = useQuery({
+  const { isLoading, data, error } = useQuery({
     queryKey: ['listings'],
     queryFn: () => apiGet('/api/listings'),
   });
@@ -166,6 +212,7 @@ export default function HomePage() {
           <p className="text-sm text-gray-500 mt-1">Live listings, indexed straight from the Sepolia chain</p>
         </div>
         <select
+          aria-label="Sort the listings"
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value)}
           className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--color-primary)]"
@@ -176,7 +223,11 @@ export default function HomePage() {
         </select>
       </div>
 
-      {isLoading || !listings ? (
+      {error ? (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <p className="text-red-800">Error: {error.message}</p>
+        </div>
+      ) : isLoading || !listings ? (
         <div className="text-gray-500">Loading...</div>
       ) : listings.length <= 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-xl p-14 text-center">

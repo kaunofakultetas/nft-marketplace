@@ -5,8 +5,8 @@
 //  in this suite. msw (Mock Service Worker, node build)
 //  intercepts every request the code under test issues — the
 //  pages' fetch() calls with their relative "/api/…" and
-//  "/ipfs/…" URLs, wagmi's and ethers' JSON-RPC posts to the
-//  relay — and answers from handlers:
+//  "/ipfs/…" URLs, wagmi's JSON-RPC posts to the relay — and
+//  answers from handlers:
 //
 //    - handlers.js holds the DEFAULT answer for every route
 //      the SPA reaches (the happy path, bodies shaped like

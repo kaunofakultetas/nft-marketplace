@@ -9,12 +9,10 @@
 //  went in a toast and closes the modal on success; a
 //  declined popup keeps it open with "Transaction rejected in
 //  the wallet."; a price ether cannot hold is refused in
-//  ethers' own words. × and Close just close.
-//
-//  Pinned: the price field's label is not tied to the field;
-//  and the modal stays mounted while hidden, so a price typed
-//  before closing is sent after reopening, though the field
-//  shows empty.
+//  ethers' own words. × and Close just close — and a price
+//  typed before closing goes with the closing: the reopened
+//  modal sends only what its field shows. The price field is
+//  named by its label.
 // -----------------------------------------------------------
 
 import { describe, it, expect, vi } from 'vitest';
@@ -118,7 +116,7 @@ describe('The modal', () => {
   });
 
 
-  it.fails('names the price field for assistive tech — PINNED KNOWN BUG: the <label> is not tied to the input (no htmlFor / id)', async () => {
+  it('names the price field for assistive tech by its label', async () => {
     await renderModal();
     expect(screen.getByLabelText('Update Listing Price (ETH)')).toBe(priceField());
   });
@@ -185,7 +183,7 @@ describe('A new price', () => {
   });
 
 
-  it.fails('sends only what the field shows after the modal was closed and opened again — PINNED KNOWN BUG: the typed price outlives the closing, the empty field sends it', async () => {
+  it('sends only what the field shows after the modal was closed and opened again — the typed price goes with the closing', async () => {
     const alert = alertSpy();
     const onClose = vi.fn();
     const { user, metamask, rerender } = await renderModal({ onClose });

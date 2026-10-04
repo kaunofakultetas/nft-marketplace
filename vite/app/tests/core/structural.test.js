@@ -8,9 +8,9 @@
 //      double and is a relative /api path; the only computed
 //      URLs are apiGet's own fetch and the IPFS helper's, fed
 //      the gateway URL of a tokenURI; the chain is reached
-//      only through the runtime config's RPC relay (wagmi's
-//      transport, every ethers provider); nothing else talks
-//      to the network
+//      only through the runtime config's RPC relay — wagmi's
+//      transport, no ethers provider of the app's own; nothing
+//      else talks to the network
 //    - every contract call names a function of the ABI it
 //      passes, with as many arguments as the function takes;
 //      the marketplace ABI the app ships declares every
@@ -19,9 +19,9 @@
 //      functions the app calls are the standard's
 //    - the route table: every page directory imported and
 //      routed, each page module default-exporting its
-//      component; the header linking every page without
-//      parameters and nothing else; every link and navigation
-//      in src/ leading to a declared route
+//      component, a catch-all last; the header linking every
+//      page without parameters and nothing else; every link
+//      and navigation in src/ leading to a declared route
 //    - index.html: English, titled like the header's
 //      wordmark; every image and icon the SPA points at
 //      exists in public/
@@ -40,7 +40,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseAbi, toEventSelector, toEventSignature, toFunctionSignature } from 'viem';
+import { toEventSelector, toEventSignature, toFunctionSignature } from 'viem';
 import { defaultHandlers } from '../support/backend/handlers';
 import * as f from '../support/backend/fixtures';
 import { MARKETPLACE_ABI, ERC721_ABI } from '../support/chain/sepolia';
@@ -284,19 +284,15 @@ describe('structural rules — the backend calls', () => {
   });
 
 
-  it('reaches the chain only through the runtime config\'s RPC relay — wagmi\'s transport and every ethers provider', () => {
+  it('reaches the chain only through the runtime config\'s RPC relay — wagmi\'s transport, no ethers provider of its own', () => {
     const main = withoutComments(readSource('src/main.jsx'));
     expect(main).toMatch(/\[sepolia\.id\]:\s*http\(config\.rpcUrl\)/);
     expect([...main.matchAll(/\bhttp\(/g)]).toHaveLength(1);
 
-    const providers = CODE.flatMap(({ file, code }) => [...code.matchAll(/new\s+ethers\.JsonRpcProvider\(/g)].map((match) => {
-      const [argument] = callArguments(code, match.index + match[0].length - 1);
-      const fromConfig = argument === 'getConfig().rpcUrl'
-        || new RegExp(`const\\s*\\{[^}]*\\b${argument}\\b[^}]*\\}\\s*=\\s*getConfig\\(\\)`).test(code);
-      return { file, argument, fromConfig };
-    }));
-    expect(providers.map(({ file }) => file).sort()).toEqual(['src/pages/NftDetail/Page.jsx', 'src/pages/SellNft/Page.jsx']);
-    expect(providers.filter((provider) => !provider.fromConfig)).toEqual([]);
+    // Every read and every wait for a receipt goes through
+    // wagmi — an ethers provider would be a second way to the
+    // chain, outside its transport
+    expect(CODE.filter(({ code }) => /\bJsonRpcProvider\b/.test(code)).map(({ file }) => file)).toEqual([]);
 
     expect(defaultHandlers.some((handler) => handler.info.method === 'POST' && String(handler.info.path).endsWith('/api/rpc'))).toBe(true);
   });
@@ -326,7 +322,7 @@ describe('structural rules — the contracts', () => {
 
   it('finds every contract call — the reads and the six writes', () => {
     expect(contractCalls().map(({ functionName }) => functionName).sort()).toEqual([
-      'approve', 'buyListing', 'cancelListing', 'getProceeds', 'listItem', 'tokenURI', 'updateListing', 'withdrawProceeds',
+      'approve', 'buyListing', 'cancelListing', 'getProceeds', 'listItem', 'ownerOf', 'tokenURI', 'updateListing', 'withdrawProceeds',
     ]);
   });
 
@@ -364,18 +360,13 @@ describe('structural rules — the contracts', () => {
   });
 
 
-  it('the ERC-721 functions the app calls are the standard\'s — in the ABI file and in the owner lookup', () => {
+  it('the ERC-721 functions the app calls are the standard\'s, as the ABI file declares them', () => {
     for (const name of ['tokenURI', 'approve', 'ownerOf']) {
       const shipped = functionsOf(nftAbi).find((item) => item.name === name);
       const standard = functionsOf(ERC721_ABI).find((item) => item.name === name);
       expect(toFunctionSignature(shipped), name).toBe(toFunctionSignature(standard));
+      expect(shipped.outputs.map((output) => output.type), name).toEqual(standard.outputs.map((output) => output.type));
     }
-
-    const lookup = readSource('src/pages/NftDetail/Page.jsx').match(/\['(function ownerOf[^']*)'\]/)?.[1];
-    expect(lookup).toBeDefined();
-    const [ownerOf] = parseAbi([lookup]);
-    expect(toFunctionSignature(ownerOf)).toBe(toFunctionSignature(functionsOf(ERC721_ABI).find((item) => item.name === 'ownerOf')));
-    expect(ownerOf.outputs.map((output) => output.type)).toEqual(['address']);
   });
 });
 
@@ -399,6 +390,7 @@ describe('structural rules — the route table', () => {
       ['/history', false, 'HistoryPage'],
       ['/about', false, 'AboutPage'],
       ['/nft/:nftAddress/:tokenId', false, 'NftDetailPage'],
+      ['*', false, 'NotFoundPage'],
     ]);
   });
 
@@ -426,13 +418,13 @@ describe('structural rules — the route table', () => {
 
 
   it('the header links every page without parameters, and nothing else', () => {
-    const plain = appRoutes().filter((route) => !route.path.includes(':')).map((route) => route.path);
+    const plain = appRoutes().filter((route) => !route.path.includes(':') && route.path !== '*').map((route) => route.path);
     expect(headerLinks().map((link) => link.to).sort()).toEqual([...plain].sort());
   });
 
 
-  it('every link and navigation in src/ leads to a route App.jsx declares', () => {
-    const patterns = appRoutes().map((route) => routePattern(route.path));
+  it('every link and navigation in src/ leads to a route App.jsx declares — not merely to the catch-all', () => {
+    const patterns = appRoutes().filter((route) => route.path !== '*').map((route) => routePattern(route.path));
     const targets = internalTargets();
     expect(targets.length).toBeGreaterThanOrEqual(10);
     const dead = targets.filter(({ path }) => !patterns.some((pattern) => pattern.test(path))).map(({ file, path }) => `${path} (${file})`);

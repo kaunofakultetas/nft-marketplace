@@ -40,9 +40,11 @@ export function toGatewayURL(uri) {
 
   const gateway = getConfig().ipfsGateway;
 
-  // ipfs://<cid>/<path>?query
+  // ipfs://<cid>/<path>?query — and the legacy ipfs://ipfs/<cid>
+  // some early minting tools wrote, whose extra ipfs/ no gateway
+  // path resolves
   if (uri.startsWith('ipfs://')) {
-    return uri.replace('ipfs://', gateway);
+    return gateway + uri.slice('ipfs://'.length).replace(/^ipfs\//, '');
   }
 
   // Path gateways, any host: https://<host>/ipfs/<cid>/<path>

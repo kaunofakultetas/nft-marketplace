@@ -225,7 +225,7 @@ describe('The connected pill', () => {
 
 
   it('shows just the address when the relay cannot read the balance', async () => {
-    const relayed = given.capture('post', '/api/rpc', { error: 'RPC relay failed: Read timed out.' }, { status: 502 });
+    const relayed = given.capture('post', '/api/rpc', { error: 'RPC relay failed: the RPC provider did not answer in time' }, { status: 502 });
     installMetamask({ connected: true });
     renderButton();
     await waitFor(() => expect(relayed.length).toBeGreaterThanOrEqual(4), { timeout: 5000 });

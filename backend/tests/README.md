@@ -6,7 +6,7 @@ Four layers, from cheapest to heaviest:
 |---|---|---|---|
 | Settings and schema | `test_main.py`, `test_database.py` | no | always |
 | Offline regression | `test_etherscan.py`, `test_indexer.py`, `test_ownership.py`, `test_pinner.py`, `test_api_routes.py` | no | always |
-| Known defects | `test_routes_defects.py`, `test_indexer_defects.py`, `test_pinner_defects.py`, `test_ownership_defects.py` | no | always (expected failures) |
+| Known defects | `test_<area>_defects.py` — none open at the moment | no | always (expected failures) |
 | Live smoke | `integration/test_live_smoke.py` | yes (running backend) | opt-in via `RUN_LIVE=1` |
 
 The offline layers are the safety net: they must pass with no internet,

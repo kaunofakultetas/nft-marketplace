@@ -152,7 +152,7 @@ const htmlResponse = (body, status) => new HttpResponse(body, { status, headers:
 
 export const VARIANTS = [
   { name: '500 { error } → the failure is shown', respond: () => jsonResponse(apiError('Internal server error'), 500), expect: 'failed', says: () => 'Internal server error' },
-  { name: '502 { error } → the failure is shown', respond: () => jsonResponse(apiError('Etherscan request failed: 503 Server Error'), 502), expect: 'failed', says: () => 'Etherscan request failed: 503 Server Error' },
+  { name: '502 { error } → the failure is shown', respond: () => jsonResponse(apiError('Etherscan request failed: Etherscan answered HTTP 503'), 502), expect: 'failed', says: () => 'Etherscan request failed: Etherscan answered HTTP 503' },
   { name: '404 { error } → the failure is shown', respond: () => jsonResponse(apiError('Not found'), 404), expect: 'failed', says: () => 'Not found' },
   { name: 'Flask\'s HTML error page (500) → the failure is shown', respond: () => htmlResponse(FLASK_500_PAGE, 500), expect: 'failed', says: (path) => httpFailure(path, 500) },
   { name: 'an empty 502 from the endpoint (the backend container is down) → the failure is shown', respond: () => new HttpResponse(null, { status: 502 }), expect: 'failed', says: (path) => httpFailure(path, 502) },

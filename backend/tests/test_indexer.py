@@ -19,13 +19,20 @@
 #               listing to its block; the scan position and
 #               its time written with the batch, all or
 #               nothing
+#    reorgs   — a re-scanned window replacing what was stored
+#               for it: an event the chain dropped gone, and
+#               its token's listing re-derived from what is
+#               left; a transaction mined again stored once,
+#               at its new place; row ids following the chain
 #    reset    — a database built for another contract wiped of
-#               its derived state, the archive kept
+#               its derived state, scan time included, the
+#               archive kept
 #    the loop — the first run backfilling from the deployment
 #               block, a restart resuming from the stored
 #               block, a small overlap below it every time,
-#               failures retried after a pause — the loop
-#               driven round by round through a fake Etherscan
+#               failures — a database busy at boot among them
+#               — retried after a pause; the loop driven round
+#               by round through a fake Etherscan
 #
 #  Offline, each test on its own throwaway database.
 ############################################################
@@ -64,7 +71,9 @@ SCANNED_AT = 1790072487
 #
 # A throwaway database the indexer module reads and writes,
 # the clock fixed, and an indexer over a fake Etherscan
-# holding the story.
+# holding the story. store() hands the indexer a batch as one
+# scan window — from the batch's earliest block on, unless
+# the test says where the window starts.
 #
 # Used by:
 #   - every test class below but DecodeTests
@@ -82,9 +91,11 @@ class IndexerTestCase(helpers.DbTestCase):
         self.etherscan = helpers.FakeEtherscan(logs=helpers.STORY_LOGS)
         self.indexer = MarketplaceIndexer(self.etherscan)
 
-    def store(self, logs, scanned_to=helpers.TIP_BLOCK):
+    def store(self, logs, scanned_to=helpers.TIP_BLOCK, from_block=None):
+        if from_block is None:
+            from_block = min((int(log['blockNumber'], 16) for log in logs), default=scanned_to + 1)
         with helpers.quiet() as printed:
-            stored = self.indexer._store_logs(logs, scanned_to)
+            stored = self.indexer._store_logs(logs, from_block, scanned_to)
         return stored, printed.getvalue()
 
     def listings(self):
@@ -248,14 +259,80 @@ class ReplayTests(IndexerTestCase):
         self.assertIn('[indexer] warning: 1 logs skipped — event signatures do not match the known ABI', printed)
 
     def test_a_batch_is_stored_all_or_nothing(self):
-        # The database fails half way through: no event, no listing
-        # and no scan position may survive — the next scan redoes
-        # the whole batch
-        failing = failing_connection(self.db_path, fail_at=4)
+        # The database fails half way through — every event written,
+        # the first listing not: no event, no listing and no scan
+        # position may survive, the next scan redoes the whole batch
+        failing = failing_connection(self.db_path, fail_on='Marketplace_ActiveListings')
         with mock.patch('app.marketplace.indexer.get_db_connection', side_effect=lambda: failing):
             with self.assertRaises(sqlite3.OperationalError):
                 self.store(helpers.STORY_LOGS)
         self.assertEqual((self.events(), self.listings(), self.state('LastScannedBlock')), ([], [], None))
+
+
+
+
+
+
+
+
+############################################################
+# ReorgTests
+############################################################
+#
+# A reorg near the tip, seen the way the loop sees it: the
+# overlap is fetched again — rescan() hands the indexer only
+# what the chain now holds from the window's start on, the
+# way Etherscan answers — and the chain holds something else
+# for it than what was stored.
+############################################################
+
+class ReorgTests(IndexerTestCase):
+
+    def rescan(self, chain, from_block):
+        self.store([log for log in chain if int(log['blockNumber'], 16) >= from_block], from_block=from_block)
+
+    def test_an_event_a_reorg_dropped_is_dropped_from_the_marketplace_too(self):
+        dropped = helpers.make_log('Listed', helpers.ART, 9, helpers.SELLER, helpers.TIP_BLOCK - 3, price=1)
+        self.store(helpers.STORY_LOGS + [dropped])
+        self.rescan(helpers.STORY_LOGS, from_block=helpers.TIP_BLOCK - REORG_OVERLAP_BLOCKS)
+        self.assertEqual(self.query('SELECT * FROM Marketplace_Events WHERE TxHash = ?', (dropped['transactionHash'],)), [])
+        self.assertEqual(self.listings(), STORY_LISTINGS)
+
+    def test_a_dropped_sale_puts_the_token_back_on_sale(self):
+        # PUG #2's sale, the last word on it, is gone: its listing
+        # below the window decides again
+        self.store(helpers.STORY_LOGS)
+        bought = helpers.STORY_LOGS[4]
+        self.rescan([log for log in helpers.STORY_LOGS if log is not bought], from_block=9712400)
+        row = next(row for row in self.listings() if (row['NftAddress'], row['TokenId']) == (helpers.PUGS, '2'))
+        self.assertEqual(row, {'NftAddress': helpers.PUGS, 'TokenId': '2', 'Seller': helpers.STUDENT,
+                               'Price': str(helpers.wei('0.03')), 'ListedBlock': 9712240})
+
+    def test_a_dropped_price_update_brings_back_the_price_before_it(self):
+        repriced = helpers.make_log('Updated', helpers.PUGS, 1, helpers.STUDENT, helpers.TIP_BLOCK - 2, price=helpers.wei('0.2'))
+        self.store(helpers.STORY_LOGS + [repriced])
+        self.rescan(helpers.STORY_LOGS, from_block=helpers.TIP_BLOCK - REORG_OVERLAP_BLOCKS)
+        self.assertEqual(self.listings(), STORY_LISTINGS)
+
+    def test_a_transaction_mined_again_after_a_reorg_is_one_event(self):
+        # At another block and log index, its old block below the
+        # window
+        tx_hash = '0x' + 'cd' * 32
+        self.store([helpers.make_log('Listed', helpers.ART, 9, helpers.SELLER, helpers.TIP_BLOCK - 3, log_index=2, price=1, tx_hash=tx_hash)])
+        self.rescan([helpers.make_log('Listed', helpers.ART, 9, helpers.SELLER, helpers.TIP_BLOCK - 1, log_index=0, price=1, tx_hash=tx_hash)],
+                    from_block=helpers.TIP_BLOCK - 1)
+        self.assertEqual([(row['BlockNumber'], row['LogIndex']) for row in self.query('SELECT * FROM Marketplace_Events WHERE TxHash = ?', (tx_hash,))],
+                         [(helpers.TIP_BLOCK - 1, 0)])
+
+    def test_row_ids_follow_the_chain_after_a_reorg(self):
+        # The feed lists events by row id: one the new chain mined
+        # between two stored ones must come out between them
+        self.store(helpers.STORY_LOGS)
+        late = helpers.make_log('Listed', helpers.ART, 9, helpers.SELLER, 9712700, price=1)
+        self.rescan(helpers.STORY_LOGS + [late], from_block=9712600)
+        blocks = [event['BlockNumber'] for event in self.events()]
+        self.assertEqual(blocks, sorted(blocks))
+        self.assertIn(9712700, blocks)
 
 
 
@@ -295,6 +372,14 @@ class ResetTests(IndexerTestCase):
         self.assertEqual((self.events(), self.listings(), self.state('LastScannedBlock')), ([], [], None))
         self.assertEqual(self.state('ContractAddress'), helpers.TEST_MARKETPLACE.lower())
         self.assertIn(f'(database was built for: {"0x" + "77" * 20})', printed)
+
+    def test_another_contract_also_forgets_when_the_old_one_was_scanned(self):
+        # /api/stats would pair "no block scanned" with the old
+        # contract's time
+        self.seed_state('ContractAddress', '0x' + '77' * 20)
+        self.store(helpers.STORY_LOGS)
+        self.reset()
+        self.assertIsNone(self.state('LastScannedAt'))
 
     def test_the_archive_survives_a_contract_change(self):
         # It spans every contract generation — that is its point
@@ -379,6 +464,15 @@ class LoopTests(IndexerTestCase):
         self.assertIn('[indexer] error: Etherscan getLogs error: NOTOK Max rate limit reached — retrying in 10s', printed)
         self.assertEqual(self.listings(), STORY_LISTINGS)
 
+    def test_a_database_busy_at_boot_is_retried(self):
+        # dbgate holding a write as the backend starts
+        connections = [helpers.sqlite_error(), self.connect(), self.connect()]
+        with mock.patch('app.marketplace.indexer.get_db_connection', side_effect=connections):
+            paused, printed = self.run_rounds(rounds=2)
+        self.assertEqual(paused, [10, 30])
+        self.assertIn('[indexer] error: database is locked — retrying in 10s', printed)
+        self.assertEqual(self.listings(), STORY_LISTINGS)
+
     def test_an_unknown_deployment_is_looked_up_again_before_any_scan(self):
         self.etherscan.fail('contract_creation', RuntimeError('Etherscan getcontractcreation error: NOTOK'), once=True)
         paused, _ = self.run_rounds(rounds=2)
@@ -404,23 +498,21 @@ class LoopTests(IndexerTestCase):
 ############################################################
 #
 # A connection to the test file whose execute raises a disk
-# error at its n-th statement — a write that fails half way
-# through a batch.
+# error at the first statement naming the given table — a
+# write that fails half way through a batch.
 #
 # Used by:
 #   - ReplayTests.test_a_batch_is_stored_all_or_nothing
 ############################################################
 
-def failing_connection(path, fail_at):
+def failing_connection(path, fail_on):
 
     class FailingConnection(sqlite3.Connection):
-        statements = 0
 
-        def execute(self, *args, **kwargs):
-            FailingConnection.statements += 1
-            if FailingConnection.statements == fail_at:
+        def execute(self, sql, *args, **kwargs):
+            if fail_on in sql:
                 raise sqlite3.OperationalError('disk I/O error')
-            return super().execute(*args, **kwargs)
+            return super().execute(sql, *args, **kwargs)
 
     connection = sqlite3.connect(path, factory=FailingConnection)
     connection.row_factory = sqlite3.Row

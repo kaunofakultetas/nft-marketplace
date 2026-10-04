@@ -13,7 +13,10 @@
 #  classroom of students refreshing "My NFTs" costs one
 #  Etherscan call per wallet per window instead of one per
 #  page view — and an Etherscan outage degrades to serving
-#  the last known holdings instead of an error page.
+#  the last known holdings instead of an error page. A wallet
+#  nobody has asked for in a few minutes is forgotten: the
+#  path takes any string a visitor types, and an entry per
+#  string for the life of the process would only grow.
 #
 #  Deliberately in-memory: the cache resets on restart,
 #  which is fine for a 60-second window. (Like the faucet's
@@ -35,6 +38,12 @@ import threading
 # orders of magnitude fewer Etherscan calls.
 REFRESH_SECONDS = 60
 
+# How long a wallet nobody asks for keeps its entry — far
+# past the refresh window, so the students still looking at
+# their holdings keep the stale fallback through an Etherscan
+# outage, since every ask restarts the clock.
+FORGET_SECONDS = 5 * 60
+
 
 
 
@@ -49,8 +58,9 @@ REFRESH_SECONDS = 60
 #
 # One instance serves every wallet. Methods in groups:
 #
-#   setup — __init__
-#   serve — get_nfts
+#   setup  — __init__
+#   serve  — get_nfts
+#   upkeep — _forget_idle
 #
 # Used by:
 #   - routes.py — the single shared instance
@@ -78,7 +88,7 @@ class WalletHoldings:
     def __init__(self, etherscan):
         self.etherscan = etherscan
         self._lock = threading.Lock()
-        self._cache = {}   # wallet -> (fetched_at, nfts)
+        self._cache = {}   # wallet -> (fetched_at, asked_at, nfts)
 
 
 
@@ -93,9 +103,12 @@ class WalletHoldings:
     # (addresses lowercase). Serves the cache while it is
     # younger than REFRESH_SECONDS; on a failed refresh a
     # STALE cache still wins over an error — only a wallet
-    # never seen before propagates the exception. Two parallel
-    # first requests for one wallet may both fetch; the second
-    # write wins and both return correct data.
+    # never seen before (or forgotten) propagates the
+    # exception. Every ask restarts the wallet's forget clock
+    # and lets the cache forget the wallets nobody asked for.
+    # Two parallel first requests for one wallet may both
+    # fetch; the second write wins and both return correct
+    # data.
     #
     # Used by:
     #   - routes.py — GET /api/my-nfts/<wallet>
@@ -103,18 +116,22 @@ class WalletHoldings:
 
     def get_nfts(self, wallet_address):
         wallet_address = wallet_address.lower()
+        now = time.time()
 
         with self._lock:
+            self._forget_idle(now)
             cached = self._cache.get(wallet_address)
-        if cached and time.time() - cached[0] < REFRESH_SECONDS:
-            return cached[1]
+            if cached:
+                self._cache[wallet_address] = (cached[0], now, cached[2])
+        if cached and now - cached[0] < REFRESH_SECONDS:
+            return cached[2]
 
 
         try:
             transfers = self.etherscan.token_nft_transfers(wallet_address)
         except Exception:
             if cached:
-                return cached[1]
+                return cached[2]
             raise
 
 
@@ -131,5 +148,29 @@ class WalletHoldings:
         ]
 
         with self._lock:
-            self._cache[wallet_address] = (time.time(), nfts)
+            self._cache[wallet_address] = (time.time(), time.time(), nfts)
         return nfts
+
+
+
+
+
+
+    ############################################################
+    # _forget_idle
+    ############################################################
+    #
+    # Drops every wallet nobody has asked for in FORGET_SECONDS.
+    # Runs under the lock its caller holds. The map only ever
+    # holds the wallets asked for in the last few minutes —
+    # each one a successful Etherscan lookup, which the API's
+    # rate limit paces — so walking it on every ask is cheap.
+    #
+    # Used by:
+    #   - get_nfts (above)
+    ############################################################
+
+    def _forget_idle(self, now):
+        idle = [wallet for wallet, entry in self._cache.items() if now - entry[1] >= FORGET_SECONDS]
+        for wallet in idle:
+            del self._cache[wallet]
