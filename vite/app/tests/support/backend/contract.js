@@ -16,8 +16,9 @@
 //    nothing crashing
 //
 //    modified bodies (an empty body, null, a string, a number,
-//    the wrong container, every field missing, every leaf
-//    null, types swapped, extra fields, a huge list, hostile
+//    the wrong container, an object where the list inside the
+//    answer should be, every field missing, every leaf null,
+//    types swapped, extra fields, a huge list, hostile
 //    unicode/markup in every string) — the page must not
 //    crash, also not once it has done what the answer leads
 //    it to (the chain reads and IPFS fetches of the tokens it
@@ -108,6 +109,15 @@ export const missingFields = (body) => (Array.isArray(body) ? body.map(() => ({}
 
 export const wrongContainer = (body) => (Array.isArray(body) ? {} : []);
 
+// The first list inside an object answer turned into an object
+// of its rows — the answer still parses and the field is still
+// there, but it is no list
+export const objectForTheList = (body) => {
+  if (!isPlainObject(body)) return body;
+  const key = Object.keys(body).find((k) => Array.isArray(body[k]));
+  return key ? { ...body, [key]: { ...body[key] } } : body;
+};
+
 // The first list in the body (the body itself, or a field such
 // as `listings` / `activity`) grown to n entries
 export const hugeList = (body, n = 300) => {
@@ -163,6 +173,7 @@ export const VARIANTS = [
   { name: 'a JSON string → page survives', respond: () => jsonResponse('unexpected'), expect: 'survives' },
   { name: 'a JSON number → page survives', respond: () => jsonResponse(42), expect: 'survives' },
   { name: 'wrong container (object for a list, list for an object) → page survives', respond: (fx) => jsonResponse(wrongContainer(fx)), expect: 'survives' },
+  { name: 'an object where the answer\'s list should be → page survives', respond: (fx) => jsonResponse(objectForTheList(fx)), expect: 'survives' },
   { name: 'every field missing → page survives', respond: (fx) => jsonResponse(missingFields(fx)), expect: 'survives' },
   { name: 'every leaf null → page survives', respond: (fx) => jsonResponse(nullLeaves(fx)), expect: 'survives' },
   { name: 'types swapped (numbers as strings, strings as numbers) → page survives', respond: (fx) => jsonResponse(swapTypes(fx)), expect: 'survives' },

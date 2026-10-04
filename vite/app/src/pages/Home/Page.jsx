@@ -202,9 +202,10 @@ export default function HomePage() {
   const [sortBy, setSortBy] = useState('newest');
 
 
-  const listings = data?.listings && SORTERS[sortBy]
-    ? [...data.listings].sort(SORTERS[sortBy])
-    : data?.listings;
+  // An answer without a list of listings reads as an empty
+  // marketplace, never as one to map over
+  const all = Array.isArray(data?.listings) ? data.listings : [];
+  const listings = SORTERS[sortBy] ? [...all].sort(SORTERS[sortBy]) : all;
 
 
   if (!isConnected) {
@@ -238,7 +239,7 @@ export default function HomePage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <p className="text-red-800">Error: {error.message}</p>
         </div>
-      ) : isLoading || !listings ? (
+      ) : isLoading ? (
         <div className="text-gray-500">Loading...</div>
       ) : listings.length <= 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-xl p-14 text-center">

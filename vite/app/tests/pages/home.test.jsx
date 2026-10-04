@@ -9,7 +9,8 @@
 //  the backend's order (newest listing first), sortable by
 //  price with wei compared as big integers, "Loading..." while
 //  the listings load, an empty marketplace's nudge towards
-//  /sell-nft, and every card opening its NFT; the sort control
+//  /sell-nft — for an answer whose list is no list too — and
+//  every card opening its NFT; the sort control
 //  named for assistive tech, a price it cannot read sorted
 //  last. And the backend contract matrices of /api/listings —
 //  a failed read said as "Error: <the message>" where the grid
@@ -224,6 +225,14 @@ describe('The grid', () => {
     expect(screen.getByText('Be the first to put a token on the marketplace')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Sell your NFT' }));
     expect(currentPath()).toBe('/sell-nft');
+  });
+
+
+  it('reads a listings answer whose list is no list as an empty marketplace', async () => {
+    given.json('get', '/api/listings', { listings: { 0: f.listings().listings[0] } });
+    renderHome();
+    expect(await screen.findByText('No NFTs listed yet')).toBeInTheDocument();
+    expect(screen.queryByTestId('render-crashed')).toBeNull();
   });
 });
 

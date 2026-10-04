@@ -111,8 +111,12 @@ function FormField({ label, type, value, onChange, placeholder }) {
 // The wallet's NFTs as tap-to-fill chips — already-listed
 // tokens are filtered out (the contract reverts on a double
 // listing). Chips show the raw address + token id on
-// purpose; renders nothing while the wallet has no unlisted
-// NFTs.
+// purpose. It offers nothing it cannot vouch for: nothing
+// until both the holdings and the listings are in, both of
+// them lists — a read that failed or an answer without its
+// list leaves the picker away, and the fields still take any
+// token by hand — and nothing while the wallet has no
+// unlisted NFTs.
 //
 // Used by:
 //   - SellNftPage (below) — above the manual fields
@@ -134,14 +138,12 @@ function OwnedNftPicker({ selectedKey, onPick }) {
   });
 
 
-  // KNOWN GAP: unlike My NFTs, the picker takes either answer's
-  // list on trust — one that is no list throws while rendering
-  const listedKeys = new Set(
-    (listingsData?.listings || []).map((item) => `${item.nftAddress}-${item.tokenId}`)
-  );
-  const available = (myNftsData?.nfts || []).filter(
-    (nft) => !listedKeys.has(`${nft.nftAddress}-${nft.tokenId}`)
-  );
+  const held = Array.isArray(myNftsData?.nfts) ? myNftsData.nfts : null;
+  const listed = Array.isArray(listingsData?.listings) ? listingsData.listings : null;
+  if (!held || !listed) return null;
+
+  const listedKeys = new Set(listed.map((item) => `${item.nftAddress}-${item.tokenId}`));
+  const available = held.filter((nft) => !listedKeys.has(`${nft.nftAddress}-${nft.tokenId}`));
 
   if (!available.length) return null;
 

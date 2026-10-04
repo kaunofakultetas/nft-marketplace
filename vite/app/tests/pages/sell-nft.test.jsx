@@ -19,14 +19,16 @@
 //  proceeds card — the connected account's unwithdrawn
 //  earnings read from the contract, withdrawn in one
 //  transaction and read again once it is mined, or "No
-//  proceeds to withdraw yet".
+//  proceeds to withdraw yet". And the backend contract
+//  matrices of /api/my-nfts/<wallet> and /api/listings — the
+//  picker offering nothing it cannot vouch for.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
 import { screen, act, waitFor, fireEvent } from '@testing-library/react';
 import { renderPage } from '../support/render';
 import { given } from '../support/backend/server';
-import { settle } from '../support/backend/contract';
+import { describeEndpointContract, settle } from '../support/backend/contract';
 import { toastSaying, toasts } from '../support/toasts';
 import * as f from '../support/backend/fixtures';
 import { sepolia } from '../support/chain/sepolia';
@@ -205,6 +207,19 @@ describe('The student\'s NFTs', () => {
     await renderSell();
     await settle(200);
     expect(screen.queryByText('Your NFTs — tap to fill the form')).toBeNull();
+  });
+
+
+  it.each([
+    ['the holdings', '/api/my-nfts/:wallet', { nfts: { 0: { nftAddress: f.PUGS, tokenId: '3' } } }],
+    ['the listings', '/api/listings', { listings: { 0: f.listings().listings[0] } }],
+  ])('offers no chips when %s answer carries no list — it cannot vouch for what it would offer', async (_, path, body) => {
+    given.json('get', path, body);
+    await renderSell();
+    await settle(200);
+    expect(screen.queryByText('Your NFTs — tap to fill the form')).toBeNull();
+    expect(screen.queryByTestId('render-crashed')).toBeNull();
+    expect(addressField()).toBeInTheDocument();
   });
 });
 
@@ -428,4 +443,60 @@ describe('Proceeds', () => {
     await settle(300);
     expect(proceedsLine()).toHaveTextContent('Withdraw 0.0 ETH proceeds');
   });
+});
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// Backend contract
+// -----------------------------------------------------------
+//
+// The page reads the backend for the picker alone: the
+// wallet's holdings, and the listings to leave out what is
+// listed already. The picker is a convenience — the fields
+// take any token by hand — so its way of failing is to stay
+// away: without both answers, both of them lists, it offers
+// nothing it cannot vouch for. The form stands whatever the
+// backend says.
+// -----------------------------------------------------------
+
+const PICKER = 'Your NFTs — tap to fill the form';
+
+const form = () => screen.getByRole('heading', { level: 1, name: 'Sell your NFT' });
+
+async function pickerStaysAway() {
+  await settle(100);
+  expect(screen.queryByText(PICKER)).toBeNull();
+  expect(addressField()).toBeInTheDocument();
+}
+
+describeEndpointContract({
+  path: '/api/my-nfts/:wallet',
+  fixture: f.myNfts(f.STUDENT),
+  render: () => renderSell(),
+  chrome: form,
+  loaded: async () => {
+    expect(await screen.findByRole('button', { name: chipName(f.PUGS, 3) })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: chipName(f.ART, 2) })).toBeInTheDocument();
+  },
+  failed: () => pickerStaysAway(),
+  loading: () => !screen.queryByText(PICKER),
+});
+
+
+describeEndpointContract({
+  path: '/api/listings',
+  fixture: f.listings(),
+  render: () => renderSell(),
+  chrome: form,
+  loaded: async () => {
+    expect(await screen.findByRole('button', { name: chipName(f.PUGS, 3) })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: chipName(f.PUGS, 1) })).toBeNull();
+  },
+  failed: () => pickerStaysAway(),
+  loading: () => !screen.queryByText(PICKER),
 });
