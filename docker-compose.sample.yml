@@ -30,7 +30,7 @@ services:
   # ------------------------------------------------------------
   nft-login:
     container_name: nft-login
-    image: vuknf/simple-login-page:20250524
+    image: vuknf/simple-login-page:20260924
     user: 1000:1000
     read_only: true
     environment:
@@ -133,11 +133,14 @@ services:
   # ------------------------------------------------------------
   nft-dbgate:
     container_name: nft-dbgate
-    image: dbgate/dbgate:7.2.3
+    image: dbgate/dbgate:7.3.2
     user: root
     read_only: true
     environment:
       WEB_ROOT: /dbgate
+
+      LOGINS: admin
+      LOGIN_PASSWORD_admin: ${DBGATE_PASSWORD}
 
       CONNECTIONS: con1
       LABEL_con1: NFT Marketplace DB

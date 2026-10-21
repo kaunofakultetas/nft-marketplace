@@ -1,8 +1,16 @@
-# Persistent data
+# Faculty's docker-compose
+/docker-compose.yml
+
+# Local  data
 /_*
-.env
-/.claude
+/.env
+.claude
+/_DEFECTS
 
 
-# Production docker compose config
-docker-compose.yml
+
+#### Common ignored files ###
+# Byte-compiled / optimized python files
+__pycache__/
+*.py[cod]
+*$py.class
