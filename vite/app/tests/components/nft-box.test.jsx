@@ -14,7 +14,8 @@
 //  without a seller (My NFTs' unlisted ones). A wrongly
 //  minted token wears its diagnosis — the short message, the
 //  fix on hover — where the description would be. The whole
-//  card, skeleton included, opens the token's own page.
+//  card, skeleton included, is a link to the token's own page
+//  — one the keyboard reaches and a new tab can open.
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
@@ -68,6 +69,13 @@ describe('Loading', () => {
     // The pulse is all there is of the card while it loads
     await user.click(document.querySelector('.animate-pulse'));
     expect(currentPath()).toBe(`/nft/${f.PUGS}/0`);
+  });
+
+
+  it('is a link to the token\'s page while it loads, too', async () => {
+    given.hang('get', '/ipfs/*');
+    renderBox(PUG_0);
+    expect(await screen.findByRole('link')).toHaveAttribute('href', `/nft/${f.PUGS}/0`);
   });
 });
 
@@ -142,6 +150,13 @@ describe('The card', () => {
     renderBox({ nftAddress: f.ART, tokenId: '0', price: f.wei('1.25'), seller: f.SELLER });
     await nameOf('Vilnius at Dusk');
     expect(screen.getByText('No description')).toBeInTheDocument();
+  });
+
+
+  it('is a link to the token\'s page — the keyboard reaches it, a new tab can open it', async () => {
+    renderBox(PUG_0);
+    await nameOf('PUG');
+    expect(screen.getByRole('link')).toHaveAttribute('href', `/nft/${f.PUGS}/0`);
   });
 
 

@@ -5,9 +5,10 @@
 //  vite.config.js):
 //
 //    - jest-dom matchers (toBeInTheDocument, toBeDisabled, …)
-//    - the browser API jsdom lacks that a library the app uses
-//      touches: matchMedia (react-hot-toast asks whether the
-//      student prefers reduced motion)
+//    - the browser API jsdom lacks that the app or a library
+//      it uses touches: matchMedia (react-hot-toast asks
+//      whether the student prefers reduced motion) and
+//      scrollTo (the app opens every new page at its top)
 //    - the msw double of everything behind the endpoint
 //      (backend/server.js): started once per file, handlers
 //      reset after every test, and a request that no handler
@@ -75,11 +76,13 @@ const FATAL_CONSOLE_PATTERNS = [
 // -----------------------------------------------------------
 //
 // Installed once per file, before any component code runs.
-// Each stub is the smallest thing that keeps the library that
-// needs it from throwing.
+// Each stub is the smallest thing that keeps the code that
+// needs it from throwing or from jsdom's "not implemented"
+// report; a test that cares spies on it.
 //
 // Used by:
 //   - every rendered toast, implicitly
+//   - App.jsx's ScrollToTop, on every navigation
 // -----------------------------------------------------------
 
 function matchMediaStub(query) {
@@ -103,6 +106,7 @@ configure({ asyncUtilTimeout: 5000 });
 
 beforeAll(() => {
   window.matchMedia = matchMediaStub;
+  window.scrollTo = () => {};
 });
 
 

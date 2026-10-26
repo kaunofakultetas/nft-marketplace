@@ -21,7 +21,7 @@
 // -----------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
-import { screen, act } from '@testing-library/react';
+import { screen, act, within } from '@testing-library/react';
 import { renderPage } from '../support/render';
 import { given, url } from '../support/backend/server';
 import { describeEndpointContract, settle } from '../support/backend/contract';
@@ -222,12 +222,14 @@ describe('The wallet\'s NFTs', () => {
 
 describe('An empty wallet, a failure, another account', () => {
 
-  it('says the wallet holds no NFTs yet and leads to the marketplace', async () => {
+  it('says the wallet holds no NFTs yet and leads to the marketplace — by a link, no button wrapped in it', async () => {
     given.json('get', '/api/my-nfts/:wallet', { nfts: [] });
     const { user } = renderMyNfts();
     expect(await screen.findByText('You don\'t own any NFTs yet')).toBeInTheDocument();
     expect(screen.getByText('Start by minting one, or buy from the marketplace')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Browse Marketplace' }));
+    const browse = screen.getByRole('link', { name: 'Browse Marketplace' });
+    expect(within(browse).queryByRole('button')).toBeNull();
+    await user.click(browse);
     expect(currentPath()).toBe('/');
   });
 

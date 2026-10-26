@@ -232,12 +232,14 @@ describe('The grid', () => {
   });
 
 
-  it('nudges towards selling when nothing is listed', async () => {
+  it('nudges towards selling when nothing is listed — by a link, no button wrapped in it', async () => {
     given.json('get', '/api/listings', { listings: [] });
     const { user } = renderHome();
     expect(await screen.findByText('No NFTs listed yet')).toBeInTheDocument();
     expect(screen.getByText('Be the first to put a token on the marketplace')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Sell your NFT' }));
+    const sell = screen.getByRole('link', { name: 'Sell your NFT' });
+    expect(within(sell).queryByRole('button')).toBeNull();
+    await user.click(sell);
     expect(currentPath()).toBe('/sell-nft');
   });
 

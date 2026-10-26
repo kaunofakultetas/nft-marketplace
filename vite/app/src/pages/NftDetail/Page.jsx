@@ -63,6 +63,8 @@ import { contractRefused } from '@/utils/chain';
 import { getConfig } from '@/config';
 import { useNftMetadata } from '@/hooks/useNftMetadata';
 import { truncateAddress, etherscanAddressUrl, etherscanTxUrl, formatDateTime, formatEth, parseWei } from '@/utils/format';
+import { useLinkState } from '@/hooks/useLinkState';
+import BackLink from '@/components/BackLink';
 import UpdateListingModal from '@/components/UpdateListingModal';
 import BuyNftModal from '@/components/BuyNftModal';
 
@@ -311,6 +313,7 @@ function InfoPanel({ metadata, metadataURL, nftAddress, tokenId, currentOwner, o
 function ActionsPanel({ isOwner, isListed, listingUnknown, currentPrice, nftAddress, tokenId, onUpdateClick, onBuyClick, loading }) {
 
   const { address } = useAccount();
+  const linkState = useLinkState();
   const { data: balance } = useBalance({ address });
   const price = formatEth(currentPrice);
 
@@ -357,10 +360,12 @@ function ActionsPanel({ isOwner, isListed, listingUnknown, currentPrice, nftAddr
               <p className="text-sm text-gray-600 mb-4">
                 You own this NFT
               </p>
-              <Link to={`/sell-nft?nftAddress=${nftAddress}&tokenId=${tokenId}`}>
-                <button className="w-full bg-[var(--color-primary)] text-white py-3 px-6 rounded-lg hover:bg-[var(--color-primary-hover)] font-semibold transition-colors">
-                  List for Sale
-                </button>
+              <Link
+                to={`/sell-nft?nftAddress=${nftAddress}&tokenId=${tokenId}`}
+                state={linkState()}
+                className="block w-full text-center bg-[var(--color-primary)] text-white py-3 px-6 rounded-lg hover:bg-[var(--color-primary-hover)] font-semibold transition-colors"
+              >
+                List for Sale
               </Link>
             </>
           )}
@@ -731,9 +736,7 @@ export default function NftDetailPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
 
-      <Link to="/" className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-medium mb-6 inline-block">
-        ← Back to Marketplace
-      </Link>
+      <BackLink className="mb-6" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6 items-start">
 

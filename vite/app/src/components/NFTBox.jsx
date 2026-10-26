@@ -9,14 +9,17 @@
 //  (shared with the activity feed's thumbnails); while it
 //  loads the card is a grey pulse skeleton of the same size,
 //  and a token that cannot be shown wears its diagnosis
-//  instead of a blank card. Clicking anywhere navigates to
-//  /nft/:nftAddress/:tokenId — buying and listing actions
-//  live THERE, not on the card.
+//  instead of a blank card. The whole card, skeleton
+//  included, is a link to /nft/:nftAddress/:tokenId — it
+//  takes the keyboard's focus and opens in a new tab like any
+//  link; buying and listing actions live THERE, not on the
+//  card.
 // -----------------------------------------------------------
 
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { useNftMetadata } from '@/hooks/useNftMetadata';
+import { useLinkState } from '@/hooks/useLinkState';
 import { truncateAddress, formatEth } from '@/utils/format';
 
 
@@ -47,7 +50,7 @@ export default function NFTBox({ price, nftAddress, tokenId, seller, priceUnknow
 
   const { metadata, problem, loading } = useNftMetadata(nftAddress, tokenId);
   const { address: userAddress } = useAccount();
-  const navigate = useNavigate();
+  const linkState = useLinkState();
 
 
   // No seller at all means "yours" — MyNfts renders unlisted
@@ -56,16 +59,12 @@ export default function NFTBox({ price, nftAddress, tokenId, seller, priceUnknow
   const formattedSellerAddress = isOwnedByUser ? 'you' : truncateAddress(seller);
 
 
-  const handleCardClick = () => {
-    navigate(`/nft/${nftAddress}/${tokenId}`);
-  };
-
-
   if (loading || !metadata) {
     return (
-      <div
-        className="w-full h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm animate-pulse cursor-pointer"
-        onClick={handleCardClick}
+      <Link
+        to={`/nft/${nftAddress}/${tokenId}`}
+        state={linkState()}
+        className="block w-full h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm animate-pulse"
       >
         <div className="aspect-square bg-gray-200" />
         <div className="p-4 space-y-3">
@@ -73,15 +72,16 @@ export default function NFTBox({ price, nftAddress, tokenId, seller, priceUnknow
           <div className="h-6 bg-gray-200 rounded w-1/2" />
           <div className="h-4 bg-gray-200 rounded w-full" />
         </div>
-      </div>
+      </Link>
     );
   }
 
 
   return (
-    <div
-      className="group w-full h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col"
-      onClick={handleCardClick}
+    <Link
+      to={`/nft/${nftAddress}/${tokenId}`}
+      state={linkState()}
+      className="group w-full h-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex flex-col"
     >
 
       {/* Image first — what a marketplace card is about */}
@@ -128,6 +128,6 @@ export default function NFTBox({ price, nftAddress, tokenId, seller, priceUnknow
         </div>
       </div>
 
-    </div>
+    </Link>
   );
 }

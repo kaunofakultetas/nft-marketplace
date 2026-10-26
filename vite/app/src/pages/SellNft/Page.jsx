@@ -16,7 +16,9 @@
 //  NFTs in the picker, arrive with ?nftAddress=...&tokenId=
 //  prefilled (the NFT detail page links here), or type the
 //  raw address + token id by hand — the technical fallback
-//  stays on purpose.
+//  stays on purpose. The form follows the address bar: the
+//  page opened again without a token — the header's Sell NFT
+//  — starts empty, never still holding the last token.
 //
 //  Two white cards on the grey canvas: the listing form and,
 //  below it, the wallet's accumulated sale proceeds with a
@@ -28,6 +30,8 @@
 //
 //    FormField      — one labelled input row
 //    OwnedNftPicker — tap-to-fill chips of unlisted NFTs
+//    ListingForm    — the approve-then-list form
+//    ProceedsCard   — the proceeds and their withdrawal
 //    SellNftPage    — form + proceeds cards (default export)
 // -----------------------------------------------------------
 
@@ -43,6 +47,7 @@ import { apiGet } from '@/utils/api';
 import { waitForReceipt } from '@/utils/chain';
 import { truncateAddress, formatEth, formatWalletError } from '@/utils/format';
 import ConnectPrompt from '@/components/ConnectPrompt';
+import BackLink from '@/components/BackLink';
 
 
 // An approval mined but reverted — most likely a token that
@@ -73,7 +78,7 @@ const WITHDRAWAL_UNCONFIRMED = 'The withdrawal was sent, but cannot be confirmed
 // the field for assistive tech.
 //
 // Used by:
-//   - SellNftPage (below) — the three form inputs
+//   - ListingForm (below) — the three form inputs
 // -----------------------------------------------------------
 
 function FormField({ label, type, value, onChange, placeholder }) {
@@ -119,7 +124,7 @@ function FormField({ label, type, value, onChange, placeholder }) {
 // unlisted NFTs.
 //
 // Used by:
-//   - SellNftPage (below) — above the manual fields
+//   - ListingForm (below) — above the manual fields
 // -----------------------------------------------------------
 
 function OwnedNftPicker({ selectedKey, onPick }) {
@@ -186,44 +191,30 @@ function OwnedNftPicker({ selectedKey, onPick }) {
 
 
 // -----------------------------------------------------------
-// SellNftPage (default export)
+// ListingForm
 // -----------------------------------------------------------
 //
-// The page: the prefill notice, the listing form with its
-// picker, then the proceeds card. Holds the approve-then-
-// list flow and the withdrawal; without a wallet, the
-// connect prompt alone.
+// The listing form — the picker, the address, token id and
+// price fields — and the approve-then-list flow its submit
+// runs. The fields start out as the token the address bar
+// prefills, or empty; the page mounts a fresh form whenever
+// that token changes.
 //
 // Used by:
-//   - App.jsx — route "/sell-nft"
+//   - SellNftPage (below)
 // -----------------------------------------------------------
 
-export default function SellNftPage() {
+function ListingForm({ prefillAddress, prefillTokenId }) {
 
-  const { isConnected, address: userAddress } = useAccount();
   const publicClient = usePublicClient();
   const { nftMarketplaceAddress } = getConfig();
-  const [searchParams] = useSearchParams();
 
-  const [nftAddress, setNftAddress] = useState(searchParams.get('nftAddress') || '');
-  const [tokenId, setTokenId] = useState(searchParams.get('tokenId') || '');
+  const [nftAddress, setNftAddress] = useState(prefillAddress);
+  const [tokenId, setTokenId] = useState(prefillTokenId);
   const [priceInput, setPriceInput] = useState('');
 
   const { writeContractAsync: approveNft } = useWriteContract();
   const { writeContractAsync: listNft } = useWriteContract();
-  const { writeContractAsync: withdrawProceedsFromContract } = useWriteContract();
-
-  const prefilled = Boolean(searchParams.get('nftAddress') && searchParams.get('tokenId'));
-
-
-  // The connected account's proceeds as the contract has them
-  // — none (0) while they are still being read
-  const { data: proceeds = 0n, refetch: refetchProceeds } = useReadContract({
-    address: nftMarketplaceAddress,
-    abi: nftMarketplaceAbi,
-    functionName: 'getProceeds',
-    args: [userAddress],
-  });
 
 
   // Approve, wait for on-chain confirmation, then list —
@@ -305,6 +296,90 @@ export default function SellNftPage() {
   };
 
 
+  return (
+    <form onSubmit={approveAndList} className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <h1 className="text-3xl font-bold tracking-tight mb-1">Sell your NFT</h1>
+      <p className="text-sm text-gray-500 mb-6">Two wallet transactions: approve the marketplace, then list</p>
+
+      <OwnedNftPicker
+        selectedKey={`${nftAddress}-${tokenId}`}
+        onPick={(nft) => {
+          setNftAddress(nft.nftAddress);
+          setTokenId(nft.tokenId);
+        }}
+      />
+
+      <FormField
+        label="NFT Address"
+        type="text"
+        value={nftAddress}
+        onChange={setNftAddress}
+        placeholder="0x..."
+      />
+      <FormField
+        label="Token ID"
+        type="number"
+        value={tokenId}
+        onChange={setTokenId}
+        placeholder="0"
+      />
+      <FormField
+        label="Price (in ETH)"
+        type="number"
+        value={priceInput}
+        onChange={setPriceInput}
+        placeholder="0.1"
+      />
+
+      <button
+        type="submit"
+        className="w-full text-white text-lg font-semibold py-3 mt-4 rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"
+      >
+        List NFT for Sale
+      </button>
+    </form>
+  );
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// ProceedsCard
+// -----------------------------------------------------------
+//
+// The connected account's sale proceeds — they stay in the
+// marketplace contract until withdrawn — and the button that
+// withdraws them, offered only while there is anything to
+// withdraw. Read for whichever account is connected, and read
+// again once a withdrawal is mined.
+//
+// Used by:
+//   - SellNftPage (below) — under the form
+// -----------------------------------------------------------
+
+function ProceedsCard() {
+
+  const { address: userAddress } = useAccount();
+  const publicClient = usePublicClient();
+  const { nftMarketplaceAddress } = getConfig();
+
+  const { writeContractAsync: withdrawProceedsFromContract } = useWriteContract();
+
+
+  // The connected account's proceeds as the contract has them
+  // — none (0) while they are still being read
+  const { data: proceeds = 0n, refetch: refetchProceeds } = useReadContract({
+    address: nftMarketplaceAddress,
+    abi: nftMarketplaceAbi,
+    functionName: 'getProceeds',
+    args: [userAddress],
+  });
+
+
   // Withdraw, then read the proceeds again once the
   // withdrawal is mined — the card must not keep offering
   // what is gone
@@ -338,6 +413,59 @@ export default function SellNftPage() {
   };
 
 
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <h3 className="text-xl font-bold mb-3">Proceeds</h3>
+      <p className="text-gray-700 mb-4">
+        Withdraw {formatEth(proceeds)} ETH proceeds
+      </p>
+      {proceeds > 0n ? (
+        <button
+          type="button"
+          onClick={withdrawProceeds}
+          className="w-full text-white text-lg font-semibold py-3 rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"
+        >
+          Withdraw Now
+        </button>
+      ) : (
+        <p className="text-gray-500 text-sm">No proceeds to withdraw yet</p>
+      )}
+    </div>
+  );
+}
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// SellNftPage (default export)
+// -----------------------------------------------------------
+//
+// The page: the way back, the prefill notice, the listing
+// form and the proceeds card; without a wallet, the connect
+// prompt alone. The form is keyed by the token the
+// address bar prefills, so the page opened again for another
+// token — or for none, from the header — starts a fresh form
+// instead of keeping the last one's fields, and Back to a
+// prefilled address fills the form for that token again.
+//
+// Used by:
+//   - App.jsx — route "/sell-nft"
+// -----------------------------------------------------------
+
+export default function SellNftPage() {
+
+  const { isConnected } = useAccount();
+  const [searchParams] = useSearchParams();
+
+  const nftAddress = searchParams.get('nftAddress') || '';
+  const tokenId = searchParams.get('tokenId') || '';
+  const prefilled = Boolean(nftAddress && tokenId);
+
+
   if (!isConnected) {
     return <ConnectPrompt message="Please connect your wallet to sell an NFT" />;
   }
@@ -346,6 +474,8 @@ export default function SellNftPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="max-w-xl mx-auto space-y-6">
+
+        <BackLink className="mb-6" />
 
         {/* Prefill notice — arriving from an NFT detail page */}
         {prefilled && (
@@ -356,68 +486,9 @@ export default function SellNftPage() {
           </div>
         )}
 
-        {/* The listing form */}
-        <form onSubmit={approveAndList} className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-          <h1 className="text-3xl font-bold tracking-tight mb-1">Sell your NFT</h1>
-          <p className="text-sm text-gray-500 mb-6">Two wallet transactions: approve the marketplace, then list</p>
+        <ListingForm key={`${nftAddress}-${tokenId}`} prefillAddress={nftAddress} prefillTokenId={tokenId} />
 
-          <OwnedNftPicker
-            selectedKey={`${nftAddress}-${tokenId}`}
-            onPick={(nft) => {
-              setNftAddress(nft.nftAddress);
-              setTokenId(nft.tokenId);
-            }}
-          />
-
-          <FormField
-            label="NFT Address"
-            type="text"
-            value={nftAddress}
-            onChange={setNftAddress}
-            placeholder="0x..."
-          />
-          <FormField
-            label="Token ID"
-            type="number"
-            value={tokenId}
-            onChange={setTokenId}
-            placeholder="0"
-          />
-          <FormField
-            label="Price (in ETH)"
-            type="number"
-            value={priceInput}
-            onChange={setPriceInput}
-            placeholder="0.1"
-          />
-
-          <button
-            type="submit"
-            className="w-full text-white text-lg font-semibold py-3 mt-4 rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"
-          >
-            List NFT for Sale
-          </button>
-        </form>
-
-        {/* Sale proceeds — accumulated in the marketplace
-            contract until withdrawn */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-          <h3 className="text-xl font-bold mb-3">Proceeds</h3>
-          <p className="text-gray-700 mb-4">
-            Withdraw {formatEth(proceeds)} ETH proceeds
-          </p>
-          {proceeds > 0n ? (
-            <button
-              type="button"
-              onClick={withdrawProceeds}
-              className="w-full text-white text-lg font-semibold py-3 rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] transition-colors"
-            >
-              Withdraw Now
-            </button>
-          ) : (
-            <p className="text-gray-500 text-sm">No proceeds to withdraw yet</p>
-          )}
-        </div>
+        <ProceedsCard />
 
       </div>
     </div>

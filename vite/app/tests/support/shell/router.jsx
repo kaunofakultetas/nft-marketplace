@@ -3,7 +3,7 @@
 //
 //  The SPA navigates (a card opens its NFT, the header's
 //  links, the detail page's "List for Sale", the empty
-//  states' buttons); a test needs to see where a click took
+//  states' links); a test needs to see where a click took
 //  the student — the address bar:
 //
 //    LocationProbe / currentPath — for renderPage (a memory

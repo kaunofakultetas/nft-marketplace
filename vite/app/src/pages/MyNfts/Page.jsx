@@ -22,6 +22,8 @@ import { Link } from 'react-router-dom';
 import { apiGet } from '@/utils/api';
 import NFTBox from '@/components/NFTBox';
 import ConnectPrompt from '@/components/ConnectPrompt';
+import BackLink from '@/components/BackLink';
+import { useLinkState } from '@/hooks/useLinkState';
 
 
 
@@ -46,6 +48,7 @@ import ConnectPrompt from '@/components/ConnectPrompt';
 export default function MyNftsPage() {
 
   const { isConnected, address } = useAccount();
+  const linkState = useLinkState();
 
 
   const { data: myNftsData, isLoading, error, refetch } = useQuery({
@@ -70,6 +73,8 @@ export default function MyNftsPage() {
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
+      <BackLink className="mb-6" />
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">My NFTs</h1>
         <p className="text-sm text-gray-500 mt-1">Every token your wallet holds, reconstructed from its transfer history</p>
@@ -96,10 +101,12 @@ export default function MyNftsPage() {
           <p className="text-sm text-gray-500 mb-6">
             Start by minting one, or buy from the marketplace
           </p>
-          <Link to="/">
-            <button className="bg-[var(--color-primary)] text-white px-8 py-2.5 rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors font-medium">
-              Browse Marketplace
-            </button>
+          <Link
+            to="/"
+            state={linkState()}
+            className="inline-block bg-[var(--color-primary)] text-white px-8 py-2.5 rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors font-medium"
+          >
+            Browse Marketplace
           </Link>
         </div>
       ) : (
@@ -146,12 +153,6 @@ export default function MyNftsPage() {
           </div>
         </>
       )}
-
-      <div className="mt-8">
-        <Link to="/" className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-medium">
-          ← Back to Marketplace
-        </Link>
-      </div>
     </div>
   );
 }

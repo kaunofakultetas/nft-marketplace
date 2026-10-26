@@ -15,6 +15,7 @@
 // -----------------------------------------------------------
 
 import { Link, NavLink } from 'react-router-dom';
+import { useLinkState } from '@/hooks/useLinkState';
 import ConnectButton from '@/components/ConnectButton';
 
 
@@ -35,9 +36,14 @@ import ConnectButton from '@/components/ConnectButton';
 // -----------------------------------------------------------
 
 function NavItem({ to, children }) {
+
+  const linkState = useLinkState();
+
+
   return (
     <NavLink
       to={to}
+      state={linkState(to)}
       end={to === '/'}
       className={({ isActive }) =>
         'px-4 py-2 rounded-full text-sm font-semibold transition-colors ' +
@@ -69,11 +75,15 @@ function NavItem({ to, children }) {
 // -----------------------------------------------------------
 
 export default function Header() {
+
+  const linkState = useLinkState();
+
+
   return (
     <nav className="sticky top-0 z-40 px-6 py-2.5 flex flex-row flex-wrap gap-y-2 justify-between items-center bg-[var(--color-primary)] shadow-md">
 
       {/* Wordmark links back to root */}
-      <Link to="/" className="flex flex-row items-center gap-3">
+      <Link to="/" state={linkState('/')} className="flex flex-row items-center gap-3">
         <img src="/img/logo_knf.png" alt="" className="h-10" />
         <h1 className="font-bold text-xl text-white tracking-tight">NFT Marketplace</h1>
       </Link>

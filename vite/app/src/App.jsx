@@ -15,13 +15,20 @@
 //
 //  Every marketplace page requires a connected wallet and
 //  renders its own "connect first" placeholder when there is
-//  none.
+//  none. Every new page opens at its top; Back and Forward
+//  put the student where they were.
+//
+//  Split into (root component last):
+//
+//    ScrollToTop — a new page at its top
+//    App         — the shell and the routes (default export)
 //
 //  Used by:
 //    - main.jsx — mounted into #root inside the provider stack
 // -----------------------------------------------------------
 
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter as Router, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import Header from '@/components/Header';
@@ -35,6 +42,40 @@ import HistoryPage from '@/pages/History/Page';
 import NftDetailPage from '@/pages/NftDetail/Page';
 import AboutPage from '@/pages/About/Page';
 import NotFoundPage from '@/pages/NotFound/Page';
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// ScrollToTop
+// -----------------------------------------------------------
+//
+// Opens every page the student goes to at its top — the
+// router alone leaves the window where the last page had it,
+// so a card clicked far down the grid opened the NFT's page
+// half way down it. Back and Forward are left to the browser,
+// which puts the student back where they were on that page.
+//
+// Used by:
+//   - App (below) — inside the router
+// -----------------------------------------------------------
+
+function ScrollToTop() {
+
+  const { pathname, search } = useLocation();
+  const navigationType = useNavigationType();
+
+
+  useEffect(() => {
+    if (navigationType !== 'POP') window.scrollTo(0, 0);
+  }, [pathname, search, navigationType]);
+
+
+  return null;
+}
 
 
 
@@ -57,6 +98,7 @@ import NotFoundPage from '@/pages/NotFound/Page';
 export default function App() {
   return (
     <Router>
+      <ScrollToTop />
 
       {/* Toasts live above the router so every page shares the
           same outlet; errors linger longer than successes */}

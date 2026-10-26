@@ -3,14 +3,15 @@
 //
 //  The catch-all page: a mistyped or outdated address gets a
 //  plain "Page not found" inside the usual shell, with the
-//  way back to the marketplace, instead of an empty page.
-//  Needs no wallet and reads nothing.
+//  way back, instead of an empty page. Needs no wallet and
+//  reads nothing.
 //
 //  Used by:
 //    - App.jsx — the catch-all route
 // -----------------------------------------------------------
 
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import BackLink from '@/components/BackLink';
 
 
 
@@ -40,9 +41,7 @@ export default function NotFoundPage() {
       <p className="text-gray-600 mb-8">
         There is no page at <span className="font-mono break-all">{pathname}</span>.
       </p>
-      <Link to="/" className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-medium">
-        ← Back to Marketplace
-      </Link>
+      <BackLink />
     </div>
   );
 }

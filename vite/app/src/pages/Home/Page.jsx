@@ -30,6 +30,7 @@ import { apiGet } from '@/utils/api';
 import { etherscanAddressUrl, formatDateTime, formatEth, parseWei } from '@/utils/format';
 import NFTBox from '@/components/NFTBox';
 import ConnectPrompt from '@/components/ConnectPrompt';
+import { useLinkState } from '@/hooks/useLinkState';
 
 
 // Sort orders for the grid — 'newest' keeps the backend's
@@ -200,6 +201,7 @@ export default function HomePage() {
   });
   const { isConnected } = useAccount();
   const [sortBy, setSortBy] = useState('newest');
+  const linkState = useLinkState();
 
 
   // An answer without a list of listings reads as an empty
@@ -245,13 +247,12 @@ export default function HomePage() {
         <div className="bg-white border border-dashed border-gray-300 rounded-xl p-14 text-center">
           <p className="text-xl font-semibold text-gray-700 mb-1">No NFTs listed yet</p>
           <p className="text-sm text-gray-500 mb-6">Be the first to put a token on the marketplace</p>
-          <Link to="/sell-nft">
-            <button
-              type="button"
-              className="text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] font-medium rounded-lg px-8 py-2.5 transition-colors"
-            >
-              Sell your NFT
-            </button>
+          <Link
+            to="/sell-nft"
+            state={linkState()}
+            className="inline-block text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] font-medium rounded-lg px-8 py-2.5 transition-colors"
+          >
+            Sell your NFT
           </Link>
         </div>
       ) : (

@@ -23,11 +23,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
-import { Link } from 'react-router-dom';
 import { apiGet } from '@/utils/api';
 import { truncateAddress, etherscanTxUrl, formatDateTime, formatEth } from '@/utils/format';
 import NftThumb from '@/components/NftThumb';
 import ConnectPrompt from '@/components/ConnectPrompt';
+import BackLink from '@/components/BackLink';
 
 
 // One colour per event type — same palette as the detail
@@ -206,6 +206,8 @@ export default function HistoryPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
 
+      <BackLink className="mb-6" />
+
       <div className="flex flex-wrap justify-between items-end gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Marketplace Activity</h1>
@@ -250,12 +252,6 @@ export default function HistoryPage() {
           </table>
         </div>
       )}
-
-      <div className="mt-8">
-        <Link to="/" className="text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] font-medium">
-          ← Back to Marketplace
-        </Link>
-      </div>
 
     </div>
   );

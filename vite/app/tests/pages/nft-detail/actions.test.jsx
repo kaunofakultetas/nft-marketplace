@@ -152,11 +152,13 @@ describe('The owner', () => {
   });
 
 
-  it('of an unlisted token is sent to the sell form with the token prefilled', async () => {
+  it('of an unlisted token is sent to the sell form with the token prefilled — by a link, no button wrapped in it', async () => {
     const { user } = renderDetail(f.PUGS, '3');
     const card = await actions();
     expect(within(card).getByText('You own this NFT')).toBeInTheDocument();
-    await user.click(within(card).getByRole('button', { name: 'List for Sale' }));
+    const listForSale = within(card).getByRole('link', { name: 'List for Sale' });
+    expect(within(listForSale).queryByRole('button')).toBeNull();
+    await user.click(listForSale);
     expect(currentPath()).toBe(`/sell-nft?nftAddress=${f.PUGS}&tokenId=3`);
   });
 

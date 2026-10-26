@@ -10,6 +10,7 @@
 
 import { Link } from 'react-router-dom';
 import { useNftMetadata } from '@/hooks/useNftMetadata';
+import { useLinkState } from '@/hooks/useLinkState';
 
 
 
@@ -32,11 +33,13 @@ import { useNftMetadata } from '@/hooks/useNftMetadata';
 export default function NftThumb({ nftAddress, tokenId }) {
 
   const { metadata, problem, loading } = useNftMetadata(nftAddress, tokenId);
+  const linkState = useLinkState();
 
 
   return (
     <Link
       to={`/nft/${nftAddress}/${tokenId}`}
+      state={linkState()}
       className="flex items-center gap-3 group"
       title={problem ? problem.message : nftAddress}
     >
